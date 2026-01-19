@@ -1,12 +1,12 @@
 {
     "name": "local-cocoa",
     "productName": "Local Cocoa",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "private": true,
     "description": "Local Cocoa personal agent with React renderer and FastAPI backend",
     "main": "dist-electron/main/main.js",
     "scripts": {
-        "dev": "concurrently \"npm:dev:renderer\" \"npm:dev:electron\" \"npm:dev:backend\"",
+        "dev": "concurrently \"npm:dev:renderer\" \"npm:dev:electron\"",
         "dev:renderer": "vite --mode dev",
         "dev:electron": "cross-env NODE_ENV=dev electron scripts/electron-dev-entry.js",
         "dev:backend": "node scripts/launch-backend.js dev",
@@ -18,6 +18,7 @@
         "build:electron": "tsc -p src/main/tsconfig.json",
         "typecheck": "tsc --noEmit",
         "lint": "eslint . --ext .ts,.tsx",
+        "lint:fix": "eslint . --ext .ts,.tsx --fix",
         "test": "npm run typecheck",
         "preview": "npm run build && electron dist-electron/main/main.js",
         "dist": "bash runtime/local_rag_dist/run.sh",
@@ -25,7 +26,14 @@
         "dist:prep": "npm run build && npm run dist:package",
         "dist:dmg": "npm run dist:prep && electron-builder --mac dmg",
         "dist:dmg-debug": "npm run dist:prep && electron-builder --mac dmg -c.mac.identity=null",
-        "dist:exe": "npm run dist:prep && electron-builder --win nsis"
+        "dist:exe": "npm run dist:prep && electron-builder --win nsis",
+        "prepare": "husky"
+    },
+    "lint-staged": {
+        "*.{ts,tsx}": [
+            "eslint --fix",
+            "eslint"
+        ]
     },
     "dependencies": {
         "archiver": "^7.0.1",
@@ -34,10 +42,13 @@
         "dotenv-expand": "^12.0.3",
         "electron-log": "^5.4.3",
         "html2canvas": "^1.4.1",
+        "i18next": "^25.7.4",
+        "i18next-browser-languagedetector": "^8.2.0",
         "lucide-react": "^0.561.0",
         "proxy-agent": "^6.5.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
+        "react-i18next": "^16.5.2",
         "react-markdown": "^9.0.3",
         "tailwind-merge": "^3.4.0"
     },
@@ -61,6 +72,8 @@
         "eslint-plugin-react": "^7.34.1",
         "eslint-plugin-react-hooks": "^4.6.0",
         "eslint-plugin-react-refresh": "^0.4.6",
+        "husky": "^9.1.7",
+        "lint-staged": "^15.5.2",
         "postcss": "^8.4.38",
         "tailwindcss": "^3.4.4",
         "ts-node": "^10.9.2",
@@ -92,8 +105,8 @@
                 "to": "local_rag_dist"
             },
             {
-                "from": "services/mcp_server",
-                "to": "mcp_server"
+                "from": "plugins",
+                "to": "plugins"
             },
             {
                 "from": "scripts/linux/start-lite-server-tiny.sh",
@@ -114,6 +127,10 @@
             {
                 "from": "runtime/llama-cpp/bin",
                 "to": "llama-cpp/bin"
+            },
+            {
+                "from": "runtime/whisper-cpp/bin",
+                "to": "whisper-cpp/bin"
             }
         ],
         "mac": {
@@ -135,6 +152,12 @@
             "target": "nsis",
             "verifyUpdateCodeSignature": false,
             "sign": null
+        },
+        "nsis": {
+            "oneClick": false,
+            "perMachine": false,
+            "allowToChangeInstallationDirectory": true,
+            "deleteAppDataOnUninstall": false
         }
     }
 }

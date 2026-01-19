@@ -1,0 +1,46 @@
+{
+    "id": "mcp",
+    "name": "MCP Server",
+    "version": "1.0.0",
+    "description": "Model Context Protocol server that enables external AI agents (like Claude Desktop) to access Local Cocoa's knowledge base securely.",
+    "author": "Local Cocoa",
+    "category": "integration",
+    "icon": "Link2",
+    "backend": {
+        "entrypoint": "server",
+        "standalone": true,
+        "stdio": true
+    },
+    "frontend": {
+        "tab": {
+            "id": "connections",
+            "label": "MCP",
+            "icon": "Link2",
+            "component": "MCPConnectionPanel"
+        }
+    },
+    "capabilities": [
+        "search",
+        "ask",
+        "list_files",
+        "get_file",
+        "get_file_content",
+        "list_folders",
+        "list_notes",
+        "get_note",
+        "create_note",
+        "update_note",
+        "delete_note",
+        "index_status",
+        "index_summary",
+        "get_suggestions"
+    ],
+    "external_clients": [
+        {
+            "id": "claude-desktop",
+            "name": "Claude Desktop",
+            "configurable": true
+        }
+    ]
+}
+

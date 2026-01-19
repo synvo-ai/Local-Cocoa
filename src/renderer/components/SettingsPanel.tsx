@@ -1,5 +1,7 @@
-import { Moon, Sun, Monitor, Activity, Database, Cpu, Settings as SettingsIcon, CheckCircle2, Download, Box, RotateCcw, Check, AlertCircle, Shield, Trash2, Plus, Copy, HardDrive, Folder, Cloud, X, Settings2, ChevronRight, Palette, FileDown, FolderOpen, Loader2, Bug } from 'lucide-react';
+import { Moon, Sun, Monitor, Activity, Database, Cpu, Settings as SettingsIcon, CheckCircle2, Download, Box, RotateCcw, Check, AlertCircle, Shield, Trash2, Plus, Copy, HardDrive, Folder, Cloud, X, Settings2, ChevronRight, FileDown, Loader2, Bug } from 'lucide-react';
+import { LanguageSwitcher } from '../../components/LanguageSwitcher';
 import { CSSProperties, useEffect, useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from './theme-provider';
 import { useSkin, AVAILABLE_SKINS, type Skin } from './skin-provider';
 import { useWorkspaceData } from '../hooks/useWorkspaceData';
@@ -21,7 +23,7 @@ interface PythonSettings {
     embed_batch_size: number;
     embed_batch_delay_ms: number;
     vision_batch_delay_ms: number;
-    default_indexing_mode: 'fast' | 'fine';
+    default_indexing_mode: 'fast' | 'deep';
 }
 
 interface ModelGroup {
@@ -47,6 +49,9 @@ function groupAssets(assets: ModelAssetStatus[]): ModelGroup[] {
         } else if (asset.id.includes('reranker') || asset.id.includes('bge')) {
             groupId = 'reranker';
             groupLabel = 'Reranker Model';
+        } else if (asset.id.includes('whisper')) {
+            groupId = 'audio';
+            groupLabel = 'Audio Model (Speech Recognition)';
         }
 
         if (!groups[groupId]) {
@@ -77,21 +82,284 @@ function groupAssets(assets: ModelAssetStatus[]): ModelGroup[] {
     });
 }
 
+// API Reference Section with tabs
+interface ApiEndpoint {
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+    path: string;
+    description: string;
+    curl: (apiKey: string) => string;
+}
+
+const API_ENDPOINTS: Record<string, ApiEndpoint[]> = {
+    'Query': [
+        {
+            method: 'POST',
+            path: '/qa',
+            description: 'Ask questions about your documents using RAG',
+            curl: (key) => `curl -X POST "http://127.0.0.1:8890/qa" \\
+  -H "Content-Type: application/json" \\
+  -H "X-API-Key: ${key}" \\
+  -d '{"query": "What is in my documents?", "limit": 5}'`
+        },
+        {
+            method: 'GET',
+            path: '/search',
+            description: 'Semantic search across all indexed files',
+            curl: (key) => `curl "http://127.0.0.1:8890/search?q=meeting%20notes&limit=10" \\
+  -H "X-API-Key: ${key}"`
+        },
+    ],
+    'Files': [
+        {
+            method: 'GET',
+            path: '/files',
+            description: 'List all indexed files with pagination',
+            curl: (key) => `curl "http://127.0.0.1:8890/files?limit=50&offset=0" \\
+  -H "X-API-Key: ${key}"`
+        },
+        {
+            method: 'GET',
+            path: '/files/{id}',
+            description: 'Get details of a specific file',
+            curl: (key) => `curl "http://127.0.0.1:8890/files/{file_id}" \\
+  -H "X-API-Key: ${key}"`
+        },
+        {
+            method: 'GET',
+            path: '/files/{id}/chunks',
+            description: 'Get text chunks of a file',
+            curl: (key) => `curl "http://127.0.0.1:8890/files/{file_id}/chunks" \\
+  -H "X-API-Key: ${key}"`
+        },
+    ],
+    'Folders': [
+        {
+            method: 'GET',
+            path: '/folders',
+            description: 'List all monitored folders',
+            curl: (key) => `curl "http://127.0.0.1:8890/folders" \\
+  -H "X-API-Key: ${key}"`
+        },
+        {
+            method: 'GET',
+            path: '/folders/{id}',
+            description: 'Get details of a specific folder',
+            curl: (key) => `curl "http://127.0.0.1:8890/folders/{folder_id}" \\
+  -H "X-API-Key: ${key}"`
+        },
+    ],
+    'System': [
+        {
+            method: 'GET',
+            path: '/health',
+            description: 'Check if the service is running',
+            curl: (key) => `curl "http://127.0.0.1:8890/health" \\
+  -H "X-API-Key: ${key}"`
+        },
+        {
+            method: 'GET',
+            path: '/index/summary',
+            description: 'Get indexing statistics',
+            curl: (key) => `curl "http://127.0.0.1:8890/index/summary" \\
+  -H "X-API-Key: ${key}"`
+        },
+        {
+            method: 'GET',
+            path: '/index/status',
+            description: 'Get current indexing status',
+            curl: (key) => `curl "http://127.0.0.1:8890/index/status" \\
+  -H "X-API-Key: ${key}"`
+        },
+    ],
+};
+
+// API Key Item with copy and reveal functionality
+function ApiKeyItem({ apiKey, localKey, onDelete }: { apiKey: ApiKey; localKey: string | null; onDelete: () => void }) {
+    const [showKey, setShowKey] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    const copyKey = () => {
+        navigator.clipboard.writeText(apiKey.key);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 group">
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">{apiKey.name}</span>
+                    {apiKey.is_system && (
+                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">System</span>
+                    )}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                    Created: {new Date(apiKey.created_at).toLocaleDateString()}
+                    {apiKey.last_used_at && ` • Last used: ${new Date(apiKey.last_used_at).toLocaleDateString()}`}
+                </div>
+                <div className="flex items-center gap-2 mt-1.5">
+                    <code className="text-xs font-mono bg-background/50 px-2 py-1 rounded border text-muted-foreground select-all">
+                        {showKey ? apiKey.key : `${apiKey.key.substring(0, 10)}${'•'.repeat(20)}`}
+                    </code>
+                    <button
+                        onClick={() => setShowKey(!showKey)}
+                        className="p-1 hover:bg-background rounded text-muted-foreground hover:text-foreground transition-colors"
+                        title={showKey ? "Hide" : "Show"}
+                        type="button"
+                    >
+                        {showKey ? (
+                            <X className="h-3.5 w-3.5" />
+                        ) : (
+                            <ChevronRight className="h-3.5 w-3.5" />
+                        )}
+                    </button>
+                    <button
+                        onClick={copyKey}
+                        className={cn(
+                            "p-1 rounded transition-colors",
+                            copied 
+                                ? "text-green-500" 
+                                : "hover:bg-background text-muted-foreground hover:text-foreground"
+                        )}
+                        title={copied ? "Copied!" : "Copy"}
+                        type="button"
+                    >
+                        {copied ? (
+                            <Check className="h-3.5 w-3.5" />
+                        ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                        )}
+                    </button>
+                </div>
+            </div>
+            {!apiKey.is_system && apiKey.key !== localKey && (
+                <button
+                    onClick={onDelete}
+                    className="p-2 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-md transition-colors ml-2"
+                    title="Delete Key"
+                    type="button"
+                >
+                    <Trash2 className="h-4 w-4" />
+                </button>
+            )}
+        </div>
+    );
+}
+
+function ApiReferenceSection({ apiKey }: { apiKey: string }) {
+    const [activeCategory, setActiveCategory] = useState<string>('Query');
+    const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+    const categories = Object.keys(API_ENDPOINTS);
+    const endpoints = API_ENDPOINTS[activeCategory] || [];
+
+    const copyToClipboard = (text: string, index: number) => {
+        navigator.clipboard.writeText(text.replace(/\\\n\s*/g, ' '));
+        setCopiedIndex(index);
+        setTimeout(() => setCopiedIndex(null), 2000);
+    };
+
+    const getMethodColor = (method: string) => {
+        switch (method) {
+            case 'GET': return 'bg-blue-500/15 text-blue-600 dark:text-blue-400';
+            case 'POST': return 'bg-green-500/15 text-green-600 dark:text-green-400';
+            case 'PUT': return 'bg-amber-500/15 text-amber-600 dark:text-amber-400';
+            case 'DELETE': return 'bg-red-500/15 text-red-600 dark:text-red-400';
+            case 'PATCH': return 'bg-purple-500/15 text-purple-600 dark:text-purple-400';
+            default: return 'bg-gray-500/15 text-gray-600 dark:text-gray-400';
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <h3 className="text-sm font-medium">API Reference</h3>
+            <div className="rounded-lg border bg-card overflow-hidden">
+                {/* Category Tabs */}
+                <div className="flex border-b bg-muted/30">
+                    {categories.map((cat) => (
+                        <button
+                            key={cat}
+                            onClick={() => setActiveCategory(cat)}
+                            className={cn(
+                                "px-4 py-2 text-xs font-medium transition-colors relative",
+                                activeCategory === cat
+                                    ? "text-foreground"
+                                    : "text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            {cat}
+                            {activeCategory === cat && (
+                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Endpoints List */}
+                <div className="divide-y">
+                    {endpoints.map((endpoint, index) => (
+                        <div key={index} className="p-4 space-y-3">
+                            <div className="flex items-center gap-3">
+                                <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", getMethodColor(endpoint.method))}>
+                                    {endpoint.method}
+                                </span>
+                                <code className="text-xs font-mono font-medium">{endpoint.path}</code>
+                                <span className="text-xs text-muted-foreground">—</span>
+                                <span className="text-xs text-muted-foreground">{endpoint.description}</span>
+                            </div>
+                            <div className="relative group">
+                                <pre className="text-[11px] bg-muted/50 p-3 rounded-md overflow-x-auto font-mono text-muted-foreground leading-relaxed">
+                                    {endpoint.curl(apiKey)}
+                                </pre>
+                                <button
+                                    onClick={() => copyToClipboard(endpoint.curl(apiKey), index)}
+                                    className={cn(
+                                        "absolute top-2 right-2 p-1.5 rounded transition-all",
+                                        "opacity-0 group-hover:opacity-100",
+                                        "hover:bg-background border border-transparent hover:border-border",
+                                        copiedIndex === index && "opacity-100"
+                                    )}
+                                    title={copiedIndex === index ? "Copied!" : "Copy"}
+                                    type="button"
+                                >
+                                    {copiedIndex === index ? (
+                                        <Check className="h-3.5 w-3.5 text-green-500" />
+                                    ) : (
+                                        <Copy className="h-3.5 w-3.5" />
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Footer hint */}
+                <div className="px-4 py-3 bg-muted/30 border-t">
+                    <p className="text-[11px] text-muted-foreground">
+                        All endpoints require the <code className="bg-muted px-1 py-0.5 rounded text-[10px]">X-API-Key</code> header for authentication.
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 interface SettingsPanelProps {
     initialTab?: 'general' | 'models' | 'retrieval' | 'security' | 'scan';
 }
 
 export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
+    const { t } = useTranslation();
     const { theme, setTheme } = useTheme();
     const { skin, setSkin } = useSkin();
     const { health, systemSpecs } = useWorkspaceData();
     const { config, loading: configLoading, updateConfig } = useModelConfig();
     const { modelStatus, handleManualModelDownload, handleRedownloadModel, modelDownloadEvent } = useModelStatus();
     const dragStyle = { WebkitAppRegion: 'drag' } as CSSProperties;
+    const MANUAL_KEY_STORAGE = 'local_rag_api_key_override';
 
     const [activeTab, setActiveTab] = useState<'general' | 'models' | 'retrieval' | 'security' | 'scan'>(initialTab);
     const [pythonSettings, setPythonSettings] = useState<PythonSettings | null>(null);
-    
+
     // Listen for tab switch requests (e.g., from Scan page)
     useEffect(() => {
         const handleTabSwitch = (event: Event) => {
@@ -107,10 +375,12 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
     }, []);
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
     const [localKey, setLocalKey] = useState<string | null>(null);
+    const [manualApiKey, setManualApiKey] = useState('');
+    const [manualKeyApplied, setManualKeyApplied] = useState(false);
     const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
     const [newKeyName, setNewKeyName] = useState('');
     const [createdKey, setCreatedKey] = useState<ApiKey | null>(null);
-    
+
     // Scan settings state
     const [recommendedDirs, setRecommendedDirs] = useState<ScanDirectory[]>([]);
     const [scanScope, setScanScope] = useState<ScanScope>({
@@ -120,7 +390,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
         customExclusions: [],
     });
     const [showExclusions, setShowExclusions] = useState(false);
-    
+
     // Export logs state
     const [isExportingLogs, setIsExportingLogs] = useState(false);
     const [exportLogsResult, setExportLogsResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -129,35 +399,72 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
     const modelGroups = useMemo(() => modelStatus?.assets ? groupAssets(modelStatus.assets) : [], [modelStatus]);
 
     // --- Python Settings Logic ---
+    const loadPythonSettings = useCallback((key: string) => {
+        fetch('http://127.0.0.1:8890/settings', { headers: { 'X-API-Key': key } })
+            .then(res => res.json())
+            .then(data => setPythonSettings(data))
+            .catch(err => console.error('Failed to load settings:', err));
+
+        fetch('http://127.0.0.1:8890/security/keys', { headers: { 'X-API-Key': key } })
+            .then(res => res.json())
+            .then(data => setApiKeys(data))
+            .catch(err => console.error('Failed to load keys:', err));
+    }, []);
+
     useEffect(() => {
+        const storedKey = localStorage.getItem(MANUAL_KEY_STORAGE)?.trim();
+        if (storedKey) {
+            setManualApiKey(storedKey);
+            window.api.setLocalKeyOverride(storedKey).then(() => {
+                setLocalKey(storedKey);
+                loadPythonSettings(storedKey);
+                setManualKeyApplied(true);
+            });
+            return;
+        }
+
         window.api.getLocalKey().then(key => {
             setLocalKey(key);
             if (key) {
-                fetch('http://127.0.0.1:8890/settings', { headers: { 'X-API-Key': key } })
-                    .then(res => res.json())
-                    .then(data => setPythonSettings(data))
-                    .catch(err => console.error('Failed to load settings:', err));
-                
-                fetch('http://127.0.0.1:8890/security/keys', { headers: { 'X-API-Key': key } })
-                    .then(res => res.json())
-                    .then(data => setApiKeys(data))
-                    .catch(err => console.error('Failed to load keys:', err));
+                loadPythonSettings(key);
             }
         });
-    }, []);
-    
+    }, [loadPythonSettings]);
+
+    const applyManualKey = useCallback(async () => {
+        const trimmed = manualApiKey.trim();
+        if (!trimmed) return;
+        localStorage.setItem(MANUAL_KEY_STORAGE, trimmed);
+        await window.api.setLocalKeyOverride(trimmed);
+        setLocalKey(trimmed);
+        loadPythonSettings(trimmed);
+        setManualKeyApplied(true);
+    }, [manualApiKey, loadPythonSettings]);
+
+    const clearManualKey = useCallback(async () => {
+        localStorage.removeItem(MANUAL_KEY_STORAGE);
+        setManualApiKey('');
+        await window.api.setLocalKeyOverride(null);
+        const key = await window.api.getLocalKey();
+        setLocalKey(key);
+        if (key) {
+            loadPythonSettings(key);
+        }
+        setManualKeyApplied(false);
+    }, [loadPythonSettings]);
+
     // --- Scan Settings Logic ---
     useEffect(() => {
         const loadScanSettings = async () => {
             const api = window.api;
             if (!api) return;
-            
+
             try {
                 const dirs = await api.getRecommendedDirectories?.();
                 if (dirs) {
                     setRecommendedDirs(dirs);
                 }
-                
+
                 const settings = await api.getScanSettings?.();
                 if (settings?.scope) {
                     setScanScope(settings.scope);
@@ -173,10 +480,10 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                 console.error('Failed to load scan settings:', error);
             }
         };
-        
+
         loadScanSettings();
     }, []);
-    
+
     const saveScanScope = useCallback(async (newScope: ScanScope) => {
         setScanScope(newScope);
         const api = window.api;
@@ -188,7 +495,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
             }
         }
     }, []);
-    
+
     const toggleScanDirectory = useCallback((dirPath: string) => {
         const existing = scanScope.directories.find(d => d.path === dirPath);
         if (existing) {
@@ -206,11 +513,11 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
             }
         }
     }, [scanScope, recommendedDirs, saveScanScope]);
-    
+
     const pickScanDirectories = useCallback(async () => {
         const api = window.api;
         if (!api?.pickScanDirectories) return;
-        
+
         try {
             const dirs = await api.pickScanDirectories();
             if (dirs && dirs.length > 0) {
@@ -223,7 +530,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
             console.error('Failed to pick directories:', error);
         }
     }, [scanScope, saveScanScope]);
-    
+
     const setScanMode = useCallback((mode: ScanMode) => {
         if (mode === 'smart') {
             const defaultDirs = recommendedDirs.filter(d => d.isDefault);
@@ -241,30 +548,30 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
     const handleExportLogs = useCallback(async () => {
         setIsExportingLogs(true);
         setExportLogsResult(null);
-        
+
         try {
             const result = await window.api.exportLogs();
             if (result.exported) {
-                setExportLogsResult({ 
-                    success: true, 
-                    message: 'Logs exported successfully!' 
+                setExportLogsResult({
+                    success: true,
+                    message: 'Logs exported successfully!'
                 });
             } else if (result.error) {
-                setExportLogsResult({ 
-                    success: false, 
-                    message: result.error 
+                setExportLogsResult({
+                    success: false,
+                    message: result.error
                 });
             } else {
-                setExportLogsResult({ 
-                    success: false, 
-                    message: 'Export cancelled' 
+                setExportLogsResult({
+                    success: false,
+                    message: 'Export cancelled'
                 });
             }
         } catch (error) {
             console.error('Failed to export logs:', error);
-            setExportLogsResult({ 
-                success: false, 
-                message: error instanceof Error ? error.message : 'Failed to export logs' 
+            setExportLogsResult({
+                success: false,
+                message: error instanceof Error ? error.message : 'Failed to export logs'
             });
         } finally {
             setIsExportingLogs(false);
@@ -276,27 +583,27 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
     const updatePythonSetting = (key: keyof PythonSettings, value: any) => {
         if (!pythonSettings || !localKey) return;
         const newSettings = { ...pythonSettings, [key]: value };
-        
+
         // Auto-calculate overlap if chunk size changes
         if (key === 'rag_chunk_size') {
             newSettings.rag_chunk_overlap = Math.floor(value / 5);
         }
 
         setPythonSettings(newSettings);
-        
+
         fetch('http://127.0.0.1:8890/settings', {
             method: 'PATCH',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
                 'X-API-Key': localKey
             },
             body: JSON.stringify({ [key]: value, ...(key === 'rag_chunk_size' ? { rag_chunk_overlap: newSettings.rag_chunk_overlap } : {}) })
         })
-        .then(() => {
-            setShowSaveSuccess(true);
-            setTimeout(() => setShowSaveSuccess(false), 2000);
-        })
-        .catch(err => console.error('Failed to save settings:', err));
+            .then(() => {
+                setShowSaveSuccess(true);
+                setTimeout(() => setShowSaveSuccess(false), 2000);
+            })
+            .catch(err => console.error('Failed to save settings:', err));
     };
 
     const createApiKey = () => {
@@ -305,16 +612,16 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
             method: 'POST',
             headers: { 'X-API-Key': localKey }
         })
-        .then(res => res.json())
-        .then(data => {
-            setCreatedKey(data);
-            setNewKeyName('');
-            // Refresh keys
-            fetch('http://127.0.0.1:8890/security/keys', { headers: { 'X-API-Key': localKey } })
-                .then(res => res.json())
-                .then(data => setApiKeys(data));
-        })
-        .catch(err => console.error('Failed to create key:', err));
+            .then(res => res.json())
+            .then(data => {
+                setCreatedKey(data);
+                setNewKeyName('');
+                // Refresh keys
+                fetch('http://127.0.0.1:8890/security/keys', { headers: { 'X-API-Key': localKey } })
+                    .then(res => res.json())
+                    .then(data => setApiKeys(data));
+            })
+            .catch(err => console.error('Failed to create key:', err));
     };
 
     const deleteApiKey = (key: string) => {
@@ -323,12 +630,12 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
             method: 'DELETE',
             headers: { 'X-API-Key': localKey }
         })
-        .then(() => {
-            fetch('http://127.0.0.1:8890/security/keys', { headers: { 'X-API-Key': localKey } })
-                .then(res => res.json())
-                .then(data => setApiKeys(data));
-        })
-        .catch(err => console.error('Failed to delete key:', err));
+            .then(() => {
+                fetch('http://127.0.0.1:8890/security/keys', { headers: { 'X-API-Key': localKey } })
+                    .then(res => res.json())
+                    .then(data => setApiKeys(data));
+            })
+            .catch(err => console.error('Failed to delete key:', err));
     };
 
     // --- Model Settings Logic ---
@@ -367,7 +674,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
     const vlmModels = useMemo(() => {
         if (!modelStatus?.assets) return [];
         // Exclude mmproj - it's a helper component, not a standalone model
-        return modelStatus.assets.filter(a => 
+        return modelStatus.assets.filter(a =>
             (a.id.includes('vlm') || a.id.includes('llm')) && !a.id.includes('mmproj')
         );
     }, [modelStatus]);
@@ -382,11 +689,18 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
     // Get available reranker models (those that exist)
     const rerankerModels = useMemo(() => {
         if (!modelStatus?.assets) return [];
-        return modelStatus.assets.filter(a => 
+        return modelStatus.assets.filter(a =>
             (a.id.includes('reranker') || a.id.includes('bge')) && a.exists
         );
     }, [modelStatus]);
     const currentRerankerModelId = config?.activeRerankerModelId || 'reranker';
+
+    // Get available audio models (whisper models that exist)
+    const audioModels = useMemo(() => {
+        if (!modelStatus?.assets) return [];
+        return modelStatus.assets.filter(a => a.id.includes('whisper') && a.exists);
+    }, [modelStatus]);
+    const currentAudioModelId = config?.activeAudioModelId || 'whisper-small';
 
     return (
         <div className="flex h-full flex-col bg-background">
@@ -394,8 +708,8 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
             <div className="flex-none border-b px-6 pt-8 pb-0" style={dragStyle}>
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
-                        <p className="text-xs text-muted-foreground">Manage application preferences</p>
+                        <h2 className="text-lg font-semibold tracking-tight">{t('settings.title')}</h2>
+                        <p className="text-xs text-muted-foreground">{t('settings.subtitle')}</p>
                     </div>
                 </div>
 
@@ -405,31 +719,31 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                         onClick={() => setActiveTab('general')}
                         className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'general' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
                     >
-                        <SettingsIcon className="h-4 w-4" /> General
+                        <SettingsIcon className="h-4 w-4" /> {t('settings.general')}
                     </button>
                     <button
                         onClick={() => setActiveTab('models')}
                         className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'models' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
                     >
-                        <Cpu className="h-4 w-4" /> Models
+                        <Cpu className="h-4 w-4" /> {t('settings.models')}
                     </button>
                     <button
                         onClick={() => setActiveTab('retrieval')}
                         className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'retrieval' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
                     >
-                        <Database className="h-4 w-4" /> Retrieval & Indexing
+                        <Database className="h-4 w-4" /> {t('settings.retrievalIndexing')}
                     </button>
                     <button
                         onClick={() => setActiveTab('security')}
                         className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'security' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
                     >
-                        <Shield className="h-4 w-4" /> Security
+                        <Shield className="h-4 w-4" /> {t('settings.security')}
                     </button>
                     <button
                         onClick={() => setActiveTab('scan')}
                         className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'scan' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
                     >
-                        <HardDrive className="h-4 w-4" /> Scan Scope
+                        <HardDrive className="h-4 w-4" /> {t('settings.scanScope')}
                     </button>
                 </div>
             </div>
@@ -440,7 +754,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                     {activeTab === 'general' && (
                         <>
                             <div className="space-y-4">
-                                <h3 className="text-sm font-medium">System Health</h3>
+                                <h3 className="text-sm font-medium">{t('settings.systemHealth')}</h3>
                                 <div className="rounded-lg border bg-card p-4 space-y-3">
                                     {health?.services?.map((service) => (
                                         <div key={service.name} className="flex items-center justify-between">
@@ -460,27 +774,35 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                             </div>
 
                             <div className="space-y-4">
-                                <h3 className="text-sm font-medium">Appearance</h3>
+                                <h3 className="text-sm font-medium">{t('settings.appearance')}</h3>
                                 <div className="grid grid-cols-3 gap-4 max-w-md">
-                                    {['light', 'dark', 'system'].map((t) => (
+                                    {(['light', 'dark', 'system'] as const).map((themeOption) => (
                                         <button
-                                            key={t}
-                                            onClick={() => setTheme(t as any)}
+                                            key={themeOption}
+                                            onClick={() => setTheme(themeOption)}
                                             className={cn(
                                                 "flex flex-col items-center justify-center gap-2 rounded-lg border p-4 transition-all hover:bg-accent",
-                                                theme === t ? "border-primary bg-primary/5" : "bg-card"
+                                                theme === themeOption ? "border-primary bg-primary/5" : "bg-card"
                                             )}
                                         >
-                                            {t === 'light' ? <Sun className="h-6 w-6" /> : t === 'dark' ? <Moon className="h-6 w-6" /> : <Monitor className="h-6 w-6" />}
-                                            <span className="text-xs font-medium capitalize">{t}</span>
+                                            {themeOption === 'light' ? <Sun className="h-6 w-6" /> : themeOption === 'dark' ? <Moon className="h-6 w-6" /> : <Monitor className="h-6 w-6" />}
+                                            <span className="text-xs font-medium">{t(`settings.${themeOption}`)}</span>
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
                             <div className="space-y-4">
-                                <h3 className="text-sm font-medium">Skin</h3>
-                                <p className="text-xs text-muted-foreground">Choose a visual style for the interface</p>
+                                <h3 className="text-sm font-medium">{t('settings.language')}</h3>
+                                <p className="text-xs text-muted-foreground">{t('settings.languageDescription')}</p>
+                                <div className="max-w-2xl">
+                                    <LanguageSwitcher />
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <h3 className="text-sm font-medium">{t('settings.skin')}</h3>
+                                <p className="text-xs text-muted-foreground">{t('settings.skinDescription')}</p>
                                 <div className="grid grid-cols-2 gap-4 max-w-md">
                                     {AVAILABLE_SKINS.map((s) => (
                                         <button
@@ -488,16 +810,16 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                             onClick={() => setSkin(s.id)}
                                             className={cn(
                                                 "relative flex flex-col items-center justify-center gap-3 rounded-xl border p-5 transition-all hover:shadow-md",
-                                                skin === s.id 
-                                                    ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+                                                skin === s.id
+                                                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                                                     : "bg-card hover:bg-accent/50"
                                             )}
                                         >
                                             {/* Skin Preview Icon */}
                                             <div className={cn(
                                                 "flex h-12 w-12 items-center justify-center rounded-lg",
-                                                s.id === 'minimalist' 
-                                                    ? "bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800" 
+                                                s.id === 'minimalist'
+                                                    ? "bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800"
                                                     : "bg-gradient-to-br from-amber-100 via-orange-100 to-amber-200 dark:from-amber-900/50 dark:via-orange-900/40 dark:to-amber-800/50"
                                             )}>
                                                 {s.id === 'minimalist' ? (
@@ -557,12 +879,12 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                             )}
                                         </button>
                                     </div>
-                                    
+
                                     {exportLogsResult && (
                                         <div className={cn(
                                             "flex items-center gap-2 px-3 py-2 rounded-lg text-sm",
-                                            exportLogsResult.success 
-                                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
+                                            exportLogsResult.success
+                                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                                                 : "bg-red-500/10 text-red-600 dark:text-red-400"
                                         )}>
                                             {exportLogsResult.success ? (
@@ -579,7 +901,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                             <span className="font-medium">Version:</span> {window.env?.APP_VERSION || 'unknown'}
                                         </p>
                                     </div>
-                                    
+
                                     {/* Debug Mode Toggle */}
                                     <div className="pt-3 border-t">
                                         <div className="flex items-center justify-between">
@@ -622,7 +944,43 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                         <div className="space-y-6">
                             <div className="rounded-lg border bg-card p-4 space-y-6">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">Active Model</label>
+                                    <label className="text-sm font-medium">API Key Override</label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Use this when the backend is started outside the app. Requests will use this key.
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={manualApiKey}
+                                            onChange={(e) => setManualApiKey(e.target.value)}
+                                            placeholder="sk-session-..."
+                                            className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                                        />
+                                        <button
+                                            onClick={applyManualKey}
+                                            disabled={!manualApiKey.trim()}
+                                            className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <Check className="h-3.5 w-3.5" />
+                                            Apply
+                                        </button>
+                                        <button
+                                            onClick={clearManualKey}
+                                            className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                            Clear
+                                        </button>
+                                    </div>
+                                    {manualKeyApplied && (
+                                        <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                                            Manual key applied for this session.
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Active Multimodal Model</label>
                                     <select
                                         value={config.activeModelId}
                                         onChange={(e) => updateConfig({ activeModelId: e.target.value })}
@@ -675,6 +1033,27 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                         </select>
                                         <p className="text-xs text-muted-foreground">
                                             Changing this will restart the reranker service.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {audioModels.length > 0 && (
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Active Audio Model (Speech Recognition)</label>
+                                        <select
+                                            value={currentAudioModelId}
+                                            onChange={(e) => updateConfig({ activeAudioModelId: e.target.value })}
+                                            disabled={configLoading}
+                                            className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                        >
+                                            {audioModels.map((model) => (
+                                                <option key={model.id} value={model.id}>
+                                                    {model.label} ({(model.sizeBytes! / 1024 / 1024).toFixed(0)} MB)
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <p className="text-xs text-muted-foreground">
+                                            Whisper model for Earlog transcription. Larger models are more accurate but slower.
                                         </p>
                                     </div>
                                 )}
@@ -762,7 +1141,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                         )}
                                     </button>
                                 </div>
-                                
+
                                 <div className="rounded-lg border bg-card p-4 space-y-6">
                                     {modelGroups.map((group) => (
                                         <div key={group.id} className="space-y-3">
@@ -857,11 +1236,11 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                         <label className="text-sm font-medium">Default Indexing Mode</label>
                                         <select
                                             value={pythonSettings.default_indexing_mode}
-                                            onChange={(e) => updatePythonSetting('default_indexing_mode', e.target.value as 'fast' | 'fine')}
+                                            onChange={(e) => updatePythonSetting('default_indexing_mode', e.target.value as 'fast' | 'deep')}
                                             className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
                                         >
                                             <option value="fast">Fast (Text-based extraction)</option>
-                                            <option value="fine">Deep (Vision-based analysis)</option>
+                                            <option value="deep">Deep (Vision-based analysis)</option>
                                         </select>
                                         <p className="text-xs text-muted-foreground">
                                             Fast mode uses text extraction for quick indexing. Deep mode uses vision analysis for better understanding of images and complex documents.
@@ -889,6 +1268,8 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                     </div>
                                 </div>
                             </div>
+
+
 
                             <div className="space-y-4">
                                 <div>
@@ -937,7 +1318,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                     </div>
                                 </div>
                             </div>
-                            
+
                             {showSaveSuccess && (
                                 <div className="flex items-center gap-2 text-sm text-emerald-600 animate-in fade-in duration-200">
                                     <CheckCircle2 className="h-4 w-4" />
@@ -989,67 +1370,21 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
 
                                     <div className="space-y-2">
                                         {apiKeys.map(key => (
-                                            <div key={key.key} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-medium text-sm">{key.name}</span>
-                                                        {key.is_system && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">System</span>}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground mt-0.5">
-                                                        Created: {new Date(key.created_at).toLocaleDateString()}
-                                                        {key.last_used_at && ` • Last used: ${new Date(key.last_used_at).toLocaleDateString()}`}
-                                                    </div>
-                                                    <div className="text-xs font-mono text-muted-foreground mt-1">
-                                                        {key.key.substring(0, 8)}...
-                                                    </div>
-                                                </div>
-                                                {!key.is_system && key.key !== localKey && (
-                                                    <button
-                                                        onClick={() => deleteApiKey(key.key)}
-                                                        className="p-2 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-md transition-colors"
-                                                        title="Delete Key"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </button>
-                                                )}
-                                            </div>
+                                            <ApiKeyItem 
+                                                key={key.key} 
+                                                apiKey={key} 
+                                                localKey={localKey}
+                                                onDelete={() => deleteApiKey(key.key)}
+                                            />
                                         ))}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-medium">API Demo</h3>
-                                <div className="rounded-lg border bg-card p-4 space-y-4">
-                                    <p className="text-sm text-muted-foreground">
-                                        You can use your API keys to access the Local RAG Agent from external applications.
-                                    </p>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-medium">Example Request (cURL)</label>
-                                        <div className="relative">
-                                            <pre className="text-xs bg-muted p-3 rounded-lg overflow-x-auto font-mono">
-{`curl -X POST "http://127.0.0.1:8890/qa" \\
-  -H "Content-Type: application/json" \\
-  -H "X-API-Key: ${localKey || 'YOUR_API_KEY'}" \\
-  -d '{
-    "query": "What is in my documents?",
-    "mode": "hybrid"
-  }'`}
-                                            </pre>
-                                            <button
-                                                onClick={() => navigator.clipboard.writeText(`curl -X POST "http://127.0.0.1:8890/qa" -H "Content-Type: application/json" -H "X-API-Key: ${localKey || 'YOUR_API_KEY'}" -d '{"query": "What is in my documents?", "mode": "hybrid"}'`)}
-                                                className="absolute top-2 right-2 p-1.5 hover:bg-background rounded border border-transparent hover:border-border"
-                                                title="Copy"
-                                                type="button"
-                                            >
-                                                <Copy className="h-3.5 w-3.5" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <ApiReferenceSection apiKey={localKey || 'YOUR_API_KEY'} />
                         </div>
                     )}
+
 
                     {activeTab === 'scan' && (
                         <div className="space-y-6">
@@ -1060,7 +1395,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                         Choose which folders to include when scanning your file system
                                     </p>
                                 </div>
-                                
+
                                 <div className="rounded-lg border bg-card p-4 space-y-4">
                                     {/* Mode Toggle */}
                                     <div className="flex items-center justify-between">
@@ -1070,8 +1405,8 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                                 onClick={() => setScanMode('smart')}
                                                 className={cn(
                                                     "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                                                    scanScope.mode === 'smart' 
-                                                        ? "bg-background text-foreground shadow-sm" 
+                                                    scanScope.mode === 'smart'
+                                                        ? "bg-background text-foreground shadow-sm"
                                                         : "text-muted-foreground hover:text-foreground"
                                                 )}
                                             >
@@ -1081,8 +1416,8 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                                 onClick={() => setScanMode('custom')}
                                                 className={cn(
                                                     "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                                                    scanScope.mode === 'custom' 
-                                                        ? "bg-background text-foreground shadow-sm" 
+                                                    scanScope.mode === 'custom'
+                                                        ? "bg-background text-foreground shadow-sm"
                                                         : "text-muted-foreground hover:text-foreground"
                                                 )}
                                             >
@@ -1090,7 +1425,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                             </button>
                                         </div>
                                     </div>
-                                    
+
                                     {/* Selected Directories */}
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
@@ -1107,15 +1442,15 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                                 </button>
                                             )}
                                         </div>
-                                        
+
                                         <div className="flex flex-wrap gap-2">
                                             {scanScope.directories.map((dir) => (
                                                 <div
                                                     key={dir.path}
                                                     className={cn(
                                                         "flex items-center gap-2 px-3 py-2 rounded-lg text-sm",
-                                                        dir.isCloudSync 
-                                                            ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" 
+                                                        dir.isCloudSync
+                                                            ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
                                                             : "bg-primary/10 text-primary"
                                                     )}
                                                 >
@@ -1135,7 +1470,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                             ))}
                                         </div>
                                     </div>
-                                    
+
                                     {/* Available Directories (Smart mode) */}
                                     {scanScope.mode === 'smart' && (
                                         <div className="space-y-2 pt-2 border-t">
@@ -1183,7 +1518,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                             </p>
                                         </div>
                                     </label>
-                                    
+
                                     <button
                                         onClick={() => setShowExclusions(!showExclusions)}
                                         className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
@@ -1192,7 +1527,7 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                         <span>View exclusion list</span>
                                         <ChevronRight className={cn("h-3 w-3 transition-transform", showExclusions && "rotate-90")} />
                                     </button>
-                                    
+
                                     {showExclusions && (
                                         <div className="p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground space-y-2">
                                             <p className="font-medium text-foreground">System directories:</p>

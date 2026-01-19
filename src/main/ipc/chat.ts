@@ -18,7 +18,7 @@ export function registerChatHandlers() {
         return askWorkspace(payload.query, payload.limit, payload.mode, payload.searchMode);
     });
 
-    ipcMain.on('qa:ask-stream', (event, payload: { query: string; limit?: number; mode?: 'qa' | 'chat'; searchMode?: 'auto' | 'knowledge' | 'direct' }) => {
+    ipcMain.on('qa:ask-stream', (event, payload: { query: string; limit?: number; mode?: 'qa' | 'chat'; searchMode?: 'auto' | 'knowledge' | 'direct'; resumeToken?: string }) => {
         if (!payload?.query) {
             event.sender.send('qa:stream-error', 'Missing question text.');
             return;
@@ -43,7 +43,8 @@ export function registerChatHandlers() {
                     event.sender.send('qa:stream-done');
                 }
             },
-            payload.searchMode
+            payload.searchMode,
+            payload.resumeToken
         ).catch((err) => {
             if (!event.sender.isDestroyed()) {
                 event.sender.send('qa:stream-error', String(err));

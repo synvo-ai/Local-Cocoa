@@ -55,7 +55,8 @@ export class WindowManager {
                 preload: config.paths.preload,
                 contextIsolation: true,
                 nodeIntegration: false,
-                sandbox: true
+                sandbox: false,
+                webSecurity: false
             }
         });
 
@@ -63,12 +64,13 @@ export class WindowManager {
             if (this.isQuitting) {
                 return;
             }
-            event.preventDefault();
+            // Only hide on macOS
             if (process.platform === 'darwin') {
+                event.preventDefault();
                 this.mainWindow?.hide();
-            } else {
-                this.mainWindow?.minimize();
             }
+            // On Windows/Linux, let the window close naturally.
+            // This will trigger 'window-all-closed', which will quit the app.
         });
 
         this.mainWindow.on('closed', () => {
@@ -132,7 +134,7 @@ export class WindowManager {
                 preload: config.paths.preload,
                 contextIsolation: true,
                 nodeIntegration: false,
-                sandbox: true
+                sandbox: false
             }
         });
 
@@ -239,7 +241,7 @@ export class WindowManager {
                 preload: config.paths.preload,
                 contextIsolation: true,
                 nodeIntegration: false,
-                sandbox: true
+                sandbox: false
             }
         });
 

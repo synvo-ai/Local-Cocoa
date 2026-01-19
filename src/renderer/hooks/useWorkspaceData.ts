@@ -9,6 +9,7 @@ import type {
     FileRecord,
     FileKind,
     IndexResultSnapshot,
+    EmailAccountSummary,
     SystemSpecs
 } from '../types';
 
@@ -101,10 +102,12 @@ function normalisePath(value: string | null | undefined): string {
 
 export function useWorkspaceData() {
     const [folders, setFolders] = useState<FolderRecord[]>([]);
+    const [emailAccounts, setEmailAccounts] = useState<EmailAccountSummary[]>([]);
     const [files, setFiles] = useState<IndexedFile[]>([]);
     const [indexingItems, setIndexingItems] = useState<IndexingItem[]>([]);
     const [summary, setSummary] = useState<IndexSummary | null>(null);
     const [progress, setProgress] = useState<IndexProgressUpdate | null>(null);
+    const [stageProgress, setStageProgress] = useState<any | null>(null);
     const [health, setHealth] = useState<HealthStatus | null>(null);
     const [systemSpecs, setSystemSpecs] = useState<SystemSpecs | null>(null);
     const [isIndexing, setIsIndexing] = useState(false);
@@ -112,28 +115,45 @@ export function useWorkspaceData() {
 
     // These are needed for partitioning but managed by other hooks or passed in
     // For now we'll keep the partitioning logic here but it might need to accept email/notes data
+    const [emailIndexingByAccount, setEmailIndexingByAccount] = useState<Record<string, IndexingItem[]>>({});
     const [noteIndexingItems, setNoteIndexingItems] = useState<IndexingItem[]>([]);
     const [noteFolderId, setNoteFolderId] = useState<string | null>(null);
 
     const pollTimerRef = useRef<number | null>(null);
     const startupRetryCountRef = useRef(0);
     const maxStartupRetries = 30; // Allow up to 30 retries (about 60 seconds with 2s intervals)
+    const refreshCountRef = useRef(0); // Track refresh count for skipping expensive queries during indexing
 
     const partitionIndexingItems = useCallback(
         (
             items: IndexingItem[],
             folderRecords: FolderRecord[],
+            accountSummaries: EmailAccountSummary[]
         ) => {
+            const accountFolderMap = new Map<string, string>();
+            accountSummaries.forEach((account) => {
+                accountFolderMap.set(account.folderId, account.id);
+            });
+
             const notesFolderIds = new Set(
                 folderRecords
                     .filter((folder) => folder.path.toLowerCase().includes('/.local_rag/notes'))
                     .map((folder) => folder.id)
             );
 
+            const emailIndexing: Record<string, IndexingItem[]> = {};
             const noteIndexing: IndexingItem[] = [];
             const generalIndexing: IndexingItem[] = [];
 
             items.forEach((item) => {
+                const accountId = accountFolderMap.get(item.folderId);
+                if (accountId) {
+                    if (!emailIndexing[accountId]) {
+                        emailIndexing[accountId] = [];
+                    }
+                    emailIndexing[accountId].push(item);
+                    return;
+                }
                 if (notesFolderIds.has(item.folderId)) {
                     noteIndexing.push(item);
                     return;
@@ -141,7 +161,7 @@ export function useWorkspaceData() {
                 generalIndexing.push(item);
             });
 
-            return { generalIndexing, noteIndexing };
+            return { generalIndexing, emailIndexing, noteIndexing };
         },
         []
     );
@@ -176,17 +196,29 @@ export function useWorkspaceData() {
                 startupRetryCountRef.current = 0;
             }
 
-            const [summaryData, folderData, inventoryData, specsData] = await Promise.all([
+            // OPTIMIZATION: Skip expensive inventory query during active indexing
+            // This query fetches 500 files with full metadata, causing DB contention
+            // Only fetch every 3rd time during indexing to reduce load
+            refreshCountRef.current += 1;
+            const isCurrentlyIndexing = healthData.status === 'indexing';
+            const shouldSkipInventory = isCurrentlyIndexing && (refreshCountRef.current % 3 !== 0);
+            
+            const [summaryData, folderData, inventoryData, emailData, specsData, stageProgressData] = await Promise.all([
                 api.indexSummary(),
                 api.listFolders(),
-                api.indexInventory({ limit: INVENTORY_LIMIT }),
-                (api as any).getSystemSpecs ? (api as any).getSystemSpecs() : Promise.resolve(null)
+                shouldSkipInventory
+                    ? Promise.resolve({ files: files, progress, indexing: [] }) // Return cached data
+                    : api.indexInventory({ limit: INVENTORY_LIMIT }),
+                api.listEmailAccounts?.() ?? Promise.resolve([]),
+                (api as any).getSystemSpecs ? (api as any).getSystemSpecs() : Promise.resolve(null),
+                (api as any).stageProgress ? (api as any).stageProgress() : Promise.resolve(null)
             ]);
 
             setHealth(healthData);
             setSystemSpecs(specsData);
             setSummary(summaryData);
             setProgress(inventoryData.progress);
+            setStageProgress(stageProgressData);
             setIsIndexing(inventoryData.progress.status === 'running' || inventoryData.progress.status === 'paused');
             setFolders(folderData);
 
@@ -197,15 +229,23 @@ export function useWorkspaceData() {
             const indexedFiles = inventoryData.files.map((record: FileRecord) => mapIndexedFile(record, folderMap));
             setFiles(indexedFiles);
 
-            const { generalIndexing, noteIndexing } = partitionIndexingItems(
+            const resolvedEmailAccounts = Array.isArray(emailData)
+                ? (emailData as EmailAccountSummary[])
+                : [];
+            setEmailAccounts(resolvedEmailAccounts);
+
+            const { generalIndexing, emailIndexing, noteIndexing } = partitionIndexingItems(
                 inventoryData.indexing,
                 folderData,
+                resolvedEmailAccounts
             );
             setIndexingItems(generalIndexing);
+            setEmailIndexingByAccount(emailIndexing);
             setNoteIndexingItems(noteIndexing);
 
             return {
                 folders: folderData,
+                emailAccounts: resolvedEmailAccounts
             };
         } catch (error) {
             // During startup, silently handle errors to avoid log spam
@@ -253,16 +293,19 @@ export function useWorkspaceData() {
                 if (status.status === 'running') {
                     setIsIndexing(true);
                     try {
-                        const [inventory, folderData] = await Promise.all([
+                        const [inventory, folderData, emailData] = await Promise.all([
                             api.indexInventory({ limit: INVENTORY_LIMIT }),
                             api.listFolders(),
+                            api.listEmailAccounts?.() ?? Promise.resolve([])
                         ]);
 
-                        const { generalIndexing, noteIndexing } = partitionIndexingItems(
+                        const { generalIndexing, emailIndexing, noteIndexing } = partitionIndexingItems(
                             inventory.indexing,
-                            folderData
+                            folderData,
+                            emailData as EmailAccountSummary[]
                         );
                         setIndexingItems(generalIndexing);
+                        setEmailIndexingByAccount(emailIndexing);
                         setNoteIndexingItems(noteIndexing);
                         setProgress(inventory.progress);
                     } catch (inventoryError) {
@@ -274,6 +317,7 @@ export function useWorkspaceData() {
                     pollTimerRef.current = window.setTimeout(poll, 1500);
                 } else {
                     setIndexingItems([]);
+                    setEmailIndexingByAccount({});
                     setNoteIndexingItems([]);
                     setIsIndexing(false);
                     stopPolling();
@@ -286,7 +330,9 @@ export function useWorkspaceData() {
             }
         };
 
-        pollTimerRef.current = window.setTimeout(poll, 1500);
+        // OPTIMIZATION: Reduce polling frequency during indexing to avoid DB lock contention
+        // Previous: 1500ms caused too many requests competing with indexing I/O
+        pollTimerRef.current = window.setTimeout(poll, 3000);
     }, [partitionIndexingItems, refreshData, stopPolling]);
 
     useEffect(() => {
@@ -298,7 +344,9 @@ export function useWorkspaceData() {
 
     useEffect(() => {
         // Use shorter interval during startup to detect backend readiness faster
-        const interval = backendStarting ? 2000 : 5000;
+        // OPTIMIZATION: Increase interval during normal operation to reduce DB contention
+        // Previous: 5000ms was still causing significant overhead during bulk indexing
+        const interval = backendStarting ? 2000 : 8000;
         const intervalId = window.setInterval(() => {
             void refreshData();
         }, interval);
@@ -314,15 +362,62 @@ export function useWorkspaceData() {
     const snapshot = useMemo(() => buildSnapshot(files, summary), [files, summary]);
     const fileMap = useMemo(() => new Map(files.map((file) => [file.id, file])), [files]);
 
+    const startSemanticIndexing = useCallback(async () => {
+        const api = window.api;
+        if (!api || !(api as any).startSemanticIndexing) return;
+        try {
+            await (api as any).startSemanticIndexing();
+            await refreshData();
+        } catch (error) {
+            console.error('Failed to start semantic indexing', error);
+        }
+    }, [refreshData]);
+
+    const stopSemanticIndexing = useCallback(async () => {
+        const api = window.api;
+        if (!api || !(api as any).stopSemanticIndexing) return;
+        try {
+            await (api as any).stopSemanticIndexing();
+            await refreshData();
+        } catch (error) {
+            console.error('Failed to stop semantic indexing', error);
+        }
+    }, [refreshData]);
+
+    const startDeepIndexing = useCallback(async () => {
+        const api = window.api;
+        if (!api || !(api as any).startDeepIndexing) return;
+        try {
+            await (api as any).startDeepIndexing();
+            await refreshData();
+        } catch (error) {
+            console.error('Failed to start deep indexing', error);
+        }
+    }, [refreshData]);
+
+    const stopDeepIndexing = useCallback(async () => {
+        const api = window.api;
+        if (!api || !(api as any).stopDeepIndexing) return;
+        try {
+            await (api as any).stopDeepIndexing();
+            await refreshData();
+        } catch (error) {
+            console.error('Failed to stop deep indexing', error);
+        }
+    }, [refreshData]);
+
     return {
         folders,
+        emailAccounts,
         files,
         indexingItems,
         summary,
         progress,
+        stageProgress,
         health,
         systemSpecs,
         isIndexing,
+        emailIndexingByAccount,
         noteIndexingItems,
         noteFolderId,
         snapshot,
@@ -332,6 +427,10 @@ export function useWorkspaceData() {
         setIsIndexing,
         setProgress,
         setIndexingItems,
-        backendStarting
+        backendStarting,
+        startSemanticIndexing,
+        stopSemanticIndexing,
+        startDeepIndexing,
+        stopDeepIndexing
     };
 }

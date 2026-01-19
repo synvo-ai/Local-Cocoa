@@ -6,13 +6,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$SOURCE_DIR = Join-Path $ROOT_DIR "services\local_rag_agent"
+$SERVICES_DIR = Join-Path $ROOT_DIR "services"
 $DIST_DIR = Join-Path $ROOT_DIR "runtime\local_rag_dist"
 $BUILD_DIR = Join-Path $ROOT_DIR "build\pyinstaller"
-$PACKAGE_NAME = "local_rag_agent"
+$PACKAGE_NAME = "services"
 
-if (-not (Test-Path $SOURCE_DIR)) {
-    Write-Error "Source package not found: $SOURCE_DIR"
+if (-not (Test-Path $SERVICES_DIR)) {
+    Write-Error "Services directory not found: $SERVICES_DIR"
     exit 1
 }
 
@@ -49,17 +49,26 @@ $VENV_PIP = Join-Path $BUILD_DIR "venv\Scripts\pip.exe"
 # Install dependencies + PyInstaller
 Write-Host "Installing dependencies..."
 & $VENV_PY -m pip install --upgrade pip wheel
-& $VENV_PIP install -r (Join-Path $SOURCE_DIR "requirements.txt")
+& $VENV_PIP install -r (Join-Path $SERVICES_DIR "app\requirements.txt")
 & $VENV_PIP install pyinstaller
 
 # Copy source files to build directory
 Write-Host "Preparing source files..."
-$DEST_PACKAGE_DIR = Join-Path $BUILD_DIR $PACKAGE_NAME
+$DEST_PACKAGE_DIR = Join-Path $BUILD_DIR "services"
 New-Item -ItemType Directory -Path $DEST_PACKAGE_DIR | Out-Null
-Copy-Item -Path "$SOURCE_DIR\*" -Destination $DEST_PACKAGE_DIR -Recurse -Force -Exclude "__pycache__", "*.pyc", ".mypy_cache", ".pytest_cache", ".DS_Store", "*.spec"
+Copy-Item -Path "$SERVICES_DIR\*" -Destination $DEST_PACKAGE_DIR -Recurse -Force -Exclude "__pycache__", "*.pyc", ".mypy_cache", ".pytest_cache", ".DS_Store", "*.spec"
+
+# Copy plugins directory to build directory as well (for relative path resolution in context.py)
+$PLUGINS_DIR = Join-Path $ROOT_DIR "plugins"
+if (Test-Path $PLUGINS_DIR) {
+    Write-Host "Copying plugins to build directory..."
+    $DEST_PLUGINS_DIR = Join-Path $BUILD_DIR "plugins"
+    New-Item -ItemType Directory -Path $DEST_PLUGINS_DIR | Out-Null
+    Copy-Item -Path "$PLUGINS_DIR\*" -Destination $DEST_PLUGINS_DIR -Recurse -Force -Exclude "__pycache__", "*.pyc", ".DS_Store"
+}
 
 # Copy main.py entry point
-Copy-Item -Path (Join-Path $SOURCE_DIR "main.py") -Destination (Join-Path $BUILD_DIR "main.py")
+Copy-Item -Path (Join-Path $SERVICES_DIR "app\main.py") -Destination (Join-Path $BUILD_DIR "main.py")
 
 # Run PyInstaller
 Write-Host "Running PyInstaller (this may take several minutes)..."
@@ -70,6 +79,8 @@ Push-Location $BUILD_DIR
     --distpath $DIST_DIR `
     --workpath (Join-Path $BUILD_DIR "work") `
     --specpath $BUILD_DIR `
+    --paths $BUILD_DIR `
+    --paths (Join-Path $BUILD_DIR "plugins") `
     --noconfirm `
     --clean `
     --collect-all uvicorn `
@@ -82,7 +93,7 @@ Push-Location $BUILD_DIR
     --collect-all onnxruntime `
     --collect-all langdetect `
     --collect-all certifi `
-    --collect-all local_rag_agent `
+    --collect-all services `
     --collect-all magika `
     --collect-all markitdown `
     --collect-all grpcio `
@@ -107,6 +118,8 @@ Push-Location $BUILD_DIR
     --hidden-import msal_extensions `
     --hidden-import azure.identity `
     --hidden-import msgraph `
+    --hidden-import onnx `
+    --hidden-import email `
     --exclude-module tkinter `
     --exclude-module matplotlib `
     --exclude-module scipy `

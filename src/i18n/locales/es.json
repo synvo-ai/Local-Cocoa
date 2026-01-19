@@ -1,0 +1,143 @@
+{
+  "app": {
+    "name": "Local Cocoa",
+    "tagline": "Tu espacio de trabajo IA privado"
+  },
+  "common": {
+    "search": "Buscar",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "close": "Cerrar",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "confirm": "Confirmar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "finish": "Finalizar",
+    "settings": "Configuración",
+    "language": "Idioma"
+  },
+  "startup": {
+    "connecting": "Conectando a servicios...",
+    "startingBackend": "Iniciando servicios backend...",
+    "modelsReady": "Modelos listos",
+    "welcome": "Bienvenido a Local Cocoa"
+  },
+  "onboarding": {
+    "welcome": "¡Bienvenido!",
+    "welcomeDescription": "Tu espacio de trabajo IA privado que se ejecuta completamente en tu dispositivo. Tus datos nunca salen de tu máquina.",
+    "private": "100% Privado",
+    "runsLocally": "Ejecución local",
+    "allYourFiles": "Todos tus archivos",
+    "aiPowered": "Impulsado por IA",
+    "downloadModels": "Descargando modelos IA",
+    "downloadDescription": "Relájate mientras descargamos los modelos IA. Esto solo sucede una vez.",
+    "allSet": "¡Todo listo!",
+    "allSetDescription": "Todos los modelos IA están listos. Ahora puedes usar Local Cocoa en todo su potencial."
+  },
+  "chat": {
+    "title": "Pregunta a tu espacio de trabajo",
+    "placeholder": "Escribe tu mensaje...",
+    "howCanIHelp": "¿Cómo puedo ayudarte hoy?",
+    "helpDescription": "Puedo ayudarte a buscar, analizar y resumir tus documentos del espacio de trabajo.",
+    "newConversation": "Nueva conversación",
+    "resetConversation": "Reiniciar conversación"
+  },
+  "knowledge": {
+    "title": "Base de conocimientos",
+    "folders": "Carpetas",
+    "files": "Archivos",
+    "addFolder": "Agregar carpeta",
+    "addFile": "Agregar archivo",
+    "removeFolder": "Eliminar carpeta",
+    "rescanFolder": "Volver a escanear",
+    "reindexFolder": "Reindexar",
+    "indexed": "indexado",
+    "pending": "pendiente"
+  },
+  "search": {
+    "searching": "Buscando...",
+    "searchComplete": "Búsqueda completada",
+    "noResults": "No se encontraron resultados",
+    "stages": {
+      "filename": "Buscando nombres de archivo...",
+      "summary": "Buscando resúmenes...",
+      "metadata": "Buscando metadatos...",
+      "hybrid": "Búsqueda semántica profunda...",
+      "complete": "Búsqueda completada"
+    }
+  },
+  "indexing": {
+    "indexing": "Indexando...",
+    "paused": "Pausado",
+    "starting": "Iniciando...",
+    "scanning": "Escaneando...",
+    "processing": "Procesando...",
+    "fastMode": "Modo rápido",
+    "deepMode": "Modo profundo",
+    "pause": "Pausar",
+    "resume": "Reanudar",
+    "stop": "Detener"
+  },
+  "models": {
+    "title": "Gestión de modelos",
+    "activeModel": "Modelo activo",
+    "availableModels": "Modelos disponibles",
+    "downloadModel": "Descargar modelo",
+    "modelSettings": "Configuración del modelo",
+    "contextSize": "Tamaño del contexto",
+    "visionPerformance": "Rendimiento de visión",
+    "maxResolution": "Resolución máxima"
+  },
+  "settings": {
+    "title": "Configuración",
+    "subtitle": "Administrar preferencias de la aplicación",
+    "general": "General",
+    "models": "Modelos",
+    "retrievalIndexing": "Recuperación e indexación",
+    "security": "Seguridad",
+    "scanScope": "Alcance del escaneo",
+    "plugins": "Plugins",
+    "language": "Idioma",
+    "languageDescription": "Elige tu idioma preferido",
+    "theme": "Tema",
+    "appearance": "Apariencia",
+    "skin": "Skin",
+    "skinDescription": "Elige un estilo visual para la interfaz",
+    "systemHealth": "Estado del sistema",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "system": "Sistema",
+    "diagnostics": "Diagnósticos y soporte"
+  },
+  "notifications": {
+    "contextTooLarge": "Esta solicitud es demasiado grande para la ventana de contexto del modelo. Intenta reducir el rendimiento de visión (resolución máxima) o aumentar el tamaño del contexto en los modelos.",
+    "folderAdded": "Carpeta agregada exitosamente",
+    "folderRemoved": "Carpeta eliminada exitosamente",
+    "indexingStarted": "Indexación iniciada",
+    "indexingComplete": "Indexación completada",
+    "errorOccurred": "Ocurrió un error"
+  },
+  "extensions": {
+    "title": "Extensiones",
+    "plugins": "Plugins",
+    "email": "Correo",
+    "notes": "Notas",
+    "activity": "Actividad"
+  },
+  "scan": {
+    "title": "Escaneo rápido",
+    "description": "Escanear archivos por fecha de modificación"
+  },
+  "mbti": {
+    "title": "Análisis MBTI",
+    "startAnalysis": "Iniciar análisis",
+    "stopAnalysis": "Detener análisis",
+    "analyzing": "Analizando...",
+    "generatingReport": "Generando informe..."
+  }
+}
+

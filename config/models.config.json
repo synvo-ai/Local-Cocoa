@@ -23,19 +23,93 @@
             "url": "https://huggingface.co/klnstpr/bge-reranker-v2-m3-Q8_0-GGUF/resolve/main/bge-reranker-v2-m3-q8_0.gguf"
         },
         {
+            "id": "qwen3-reranker",
+            "label": "Qwen3 Reranker (0.6B Q8_0)",
+            "relativePath": "qwen3-reranker-0.6b-q8_0.gguf",
+            "type": "reranker",
+            "optional": true,
+            "url": "https://huggingface.co/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF/resolve/main/qwen3-reranker-0.6b-q8_0.gguf"
+        },
+        {
             "id": "vlm",
-            "label": "Qwen3VL-2B-Instruct Q4_K_M",
+            "label": "Qwen3 VL 2B (Fast)",
             "relativePath": "qwenvl/Qwen3VL-2B-Instruct-Q4_K_M.gguf",
             "type": "vlm",
+            "mmprojId": "vlm-mmproj",
             "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
         },
         {
             "id": "vlm-mmproj",
-            "label": "Qwen3VL mmproj Q8_0",
+            "label": "Qwen3VL-2B mmproj Q8_0",
             "relativePath": "qwenvl/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
             "type": "vlm",
             "optional": true,
             "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
+        },
+        {
+            "id": "whisper-base",
+            "label": "Whisper Base English",
+            "relativePath": "ggml-base.en.bin",
+            "type": "whisper",
+            "optional": true,
+            "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"
+        },
+        {
+            "id": "whisper-small",
+            "label": "Whisper Small (Multi-language, Recommended)",
+            "relativePath": "ggml-small.bin",
+            "type": "whisper",
+            "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
+        },
+        {
+            "id": "whisper-medium",
+            "label": "Whisper Medium (Multi-language, High Quality)",
+            "relativePath": "ggml-medium.bin",
+            "type": "whisper",
+            "optional": true,
+            "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin"
+        },
+        {
+            "id": "whisper-large-v3-turbo",
+            "label": "Whisper Large V3 Turbo (Best Quality)",
+            "relativePath": "ggml-large-v3-turbo.bin",
+            "type": "whisper",
+            "optional": true,
+            "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"
+        },
+        {
+            "id": "vlm-4b",
+            "label": "Qwen3 VL 4B (Balanced)",
+            "relativePath": "qwenvl/Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+            "type": "vlm",
+            "optional": true,
+            "mmprojId": "vlm-4b-mmproj",
+            "url": "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3VL-4B-Instruct-Q4_K_M.gguf"
+        },
+        {
+            "id": "vlm-4b-mmproj",
+            "label": "Qwen3VL-4B mmproj Q8_0",
+            "relativePath": "qwenvl/mmproj-Qwen3VL-4B-Instruct-Q8_0.gguf",
+            "type": "vlm",
+            "optional": true,
+            "url": "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-4B-Instruct-Q8_0.gguf"
+        },
+        {
+            "id": "vlm-8b",
+            "label": "Qwen3 VL 8B (Quality)",
+            "relativePath": "qwenvl/Qwen3VL-8B-Instruct-Q4_K_M.gguf",
+            "type": "vlm",
+            "optional": true,
+            "mmprojId": "vlm-8b-mmproj",
+            "url": "https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/main/Qwen3VL-8B-Instruct-Q4_K_M.gguf"
+        },
+        {
+            "id": "vlm-8b-mmproj",
+            "label": "Qwen3VL-8B mmproj Q8_0",
+            "relativePath": "qwenvl/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf",
+            "type": "vlm",
+            "optional": true,
+            "url": "https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"
         }
     ]
 }

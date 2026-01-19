@@ -28,6 +28,7 @@ poetry.lock
 
 # Databases and runtime files and db lock suffix
 *.sqlite3
+*.sqlite
 *.db
 *.db.lock
 
@@ -92,6 +93,18 @@ package-lock.json~
 log/
 
 backend/
+!plugins/*/backend/
+!plugins/*/backend/**
+
+# Benchmark results (keep runner code)
+benchmark/results/
+benchmark/*.log
+benchmark/data/
+
+
+# always ignore python cache everywhere
+__pycache__/
+*.py[cod]
 
 storage/
 
@@ -106,3 +119,26 @@ test_models.py
 question.sh
 
 package-lock.json
+
+!services/storage/
+.env
+.env.benchmark
+.vscode/
+
+# Dev mode session key (auto-generated)
+.dev-session-key
+
+# Husky internal files (keep hooks like pre-commit tracked)
+.husky/_
+
+# Certificates and security keys (should not be committed)
+assets/certs/
+*.csr
+*.key
+*.pem
+*.crt
+*.cert
+*.p12
+*.pfx
+
+profiling/

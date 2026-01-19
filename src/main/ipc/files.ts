@@ -20,6 +20,19 @@ import {
     getChunkById,
     listChunksForFile,
     getChunkHighlightPngBase64,
+    // Staged indexing
+    getStageProgress,
+    startSemanticIndexing,
+    stopSemanticIndexing,
+    startDeepIndexing,
+    stopDeepIndexing,
+    getDeepStatus,
+    runStagedIndex,
+    // Privacy
+    setFilePrivacy,
+    getFilePrivacy,
+    setFolderPrivacy,
+    getFolderPrivacy,
 } from '../backendClient';
 import { WindowManager } from '../windowManager';
 
@@ -87,6 +100,16 @@ export function registerFileHandlers(windowManager: WindowManager) {
     ipcMain.handle('index:summary', async () => getIndexSummary());
     ipcMain.handle('index:pause', async () => pauseIndexing());
     ipcMain.handle('index:resume', async () => resumeIndexing());
+
+    // Staged indexing (two-round progressive system)
+    ipcMain.handle('index:stage-progress', async (_event, folderId?: string) => getStageProgress(folderId));
+    ipcMain.handle('index:start-semantic', async () => startSemanticIndexing());
+    ipcMain.handle('index:stop-semantic', async () => stopSemanticIndexing());
+    ipcMain.handle('index:start-deep', async () => startDeepIndexing());
+    ipcMain.handle('index:stop-deep', async () => stopDeepIndexing());
+    ipcMain.handle('index:deep-status', async () => getDeepStatus());
+    ipcMain.handle('index:run-staged', async (_event, options?: { folders?: string[]; files?: string[]; mode?: 'rescan' | 'reindex' }) => 
+        runStagedIndex(options));
 
     ipcMain.handle('index:list', async (_event, payload: { folderId?: string; limit?: number; offset?: number }) => {
         return getIndexInventory(payload);
@@ -242,5 +265,66 @@ export function registerFileHandlers(windowManager: WindowManager) {
                 event.sender.send('search:stream-error', String(err));
             }
         });
+    });
+
+    // ========================================
+    // Privacy Handlers
+    // ========================================
+
+    ipcMain.handle('privacy:set-file', async (_event, payload: { fileId: string; privacyLevel: 'normal' | 'private' }) => {
+        if (!payload?.fileId) {
+            throw new Error('Missing file id.');
+        }
+        const result = await setFilePrivacy(payload.fileId, payload.privacyLevel);
+        return {
+            fileId: result.file_id,
+            privacyLevel: result.privacy_level,
+            updated: result.updated
+        };
+    });
+
+    ipcMain.handle('privacy:get-file', async (_event, payload: { fileId: string }) => {
+        if (!payload?.fileId) {
+            throw new Error('Missing file id.');
+        }
+        const result = await getFilePrivacy(payload.fileId);
+        return {
+            fileId: result.file_id,
+            privacyLevel: result.privacy_level
+        };
+    });
+
+    ipcMain.handle('privacy:set-folder', async (_event, payload: { 
+        folderId: string; 
+        privacyLevel: 'normal' | 'private';
+        applyToFiles?: boolean;
+    }) => {
+        if (!payload?.folderId) {
+            throw new Error('Missing folder id.');
+        }
+        const result = await setFolderPrivacy(
+            payload.folderId, 
+            payload.privacyLevel, 
+            payload.applyToFiles ?? true
+        );
+        return {
+            folderId: result.folder_id,
+            privacyLevel: result.privacy_level,
+            updated: result.updated,
+            filesUpdated: result.files_updated
+        };
+    });
+
+    ipcMain.handle('privacy:get-folder', async (_event, payload: { folderId: string }) => {
+        if (!payload?.folderId) {
+            throw new Error('Missing folder id.');
+        }
+        const result = await getFolderPrivacy(payload.folderId);
+        return {
+            folderId: result.folder_id,
+            privacyLevel: result.privacy_level,
+            filesNormal: result.files_normal,
+            filesPrivate: result.files_private
+        };
     });
 }

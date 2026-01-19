@@ -6,6 +6,7 @@ import pkgJson from '../../package.json';
 
 const isDev = !app.isPackaged && process.env.NODE_ENV !== 'prod';
 const projectRoot = path.resolve(__dirname, '../..');
+const runtimeRoot = isDev ? path.join(projectRoot, 'runtime') : process.resourcesPath;
 
 const pkg = pkgJson as { name?: string; version?: string };
 process.env.APP_NAME = pkg.name ?? '';
@@ -39,6 +40,7 @@ export const config = {
             vlm: 8007, // Keep hardcoded or add to env if needed, based on existing pattern only backend was varied mostly? Actually let's use env if available but keep defaults matching default.json
             embedding: 8005,
             reranker: 8006,
+            whisper: 8080,
         };
     },
     get urls() {
@@ -47,12 +49,9 @@ export const config = {
         };
     },
     paths: {
-        llamaServer: path.join(
-            isDev ? path.join(projectRoot, 'runtime') : process.resourcesPath, 'llama-cpp', 'bin', `llama-server${process.platform === 'win32' ? '.exe' : ''}`
-        ),
-        backendScript: path.join(
-            isDev ? path.join(projectRoot, 'runtime') : process.resourcesPath, 'local_rag_dist', `run${process.platform === 'win32' ? '.ps1' : '.sh'}`
-        ),
+        llamaServer: path.join(runtimeRoot, 'llama-cpp', 'bin', `llama-server${process.platform === 'win32' ? '.exe' : ''}`),
+        whisperServer: path.join(runtimeRoot, 'whisper-cpp', 'bin', `whisper-server${process.platform === 'win32' ? '.exe' : ''}`),
+        backendScript: path.join(runtimeRoot, 'local_rag_dist', `run${process.platform === 'win32' ? '.ps1' : '.sh'}`),
         preload: path.join(__dirname, '../preload', isDev ? 'preload-dev.js' : 'preload.js'),
         dist: path.join(projectRoot, 'dist-electron', 'renderer'),
     },

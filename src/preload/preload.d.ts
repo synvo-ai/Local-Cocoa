@@ -1,4 +1,9 @@
 import type {
+    EmailAccountPayload,
+    EmailAccountSummary,
+    EmailMessageContent,
+    EmailMessageSummary,
+    EmailSyncResult,
     FileListResponse,
     FolderRecord,
     HealthStatus,
@@ -35,6 +40,8 @@ declare global {
             listFolders: () => Promise<FolderRecord[]>;
             addFolder: (path: string, label?: string, scanMode?: 'full' | 'manual') => Promise<FolderRecord>;
             removeFolder: (folderId: string) => Promise<{ id: string }>;
+            getLocalKey: () => Promise<string | null>;
+            setLocalKeyOverride: (key: string | null) => Promise<boolean>;
             runIndex: (options?: RunIndexOptions) => Promise<IndexProgressUpdate>;
             indexFolder: (folderId: string) => Promise<IndexProgressUpdate>;
             indexFile: (path: string) => Promise<IndexProgressUpdate>;
@@ -63,6 +70,12 @@ declare global {
                 onDone: () => void;
             }, searchMode?: 'auto' | 'knowledge' | 'direct') => () => void;
             health: () => Promise<HealthStatus>;
+            listEmailAccounts: () => Promise<EmailAccountSummary[]>;
+            addEmailAccount: (payload: EmailAccountPayload) => Promise<EmailAccountSummary>;
+            removeEmailAccount: (accountId: string) => Promise<{ id: string }>;
+            syncEmailAccount: (accountId: string, limit?: number) => Promise<EmailSyncResult>;
+            listEmailMessages: (accountId: string, limit?: number) => Promise<EmailMessageSummary[]>;
+            getEmailMessage: (messageId: string) => Promise<EmailMessageContent>;
             listNotes: () => Promise<NoteSummary[]>;
             createNote: (payload: NoteDraftPayload) => Promise<NoteSummary>;
             getNote: (noteId: string) => Promise<NoteContent>;
@@ -99,6 +112,63 @@ declare global {
             addChatMessage: (sessionId: string, message: Partial<ConversationMessage>) => Promise<ConversationMessage>;
             exportLogs: () => Promise<{ exported: boolean; path: string | null; error?: string }>;
             getLogsPath: () => Promise<string>;
+// User Memory APIs
+            memoryGetSummary?: (userId: string) => Promise<{
+                user_id: string;
+                profile?: {
+                    user_id: string;
+                    user_name?: string;
+                    personality?: string[];
+                    interests?: string[];
+                    hard_skills?: Array<{ name: string; level: string }>;
+                    soft_skills?: Array<{ name: string; level: string }>;
+                };
+                episodes_count: number;
+                event_logs_count: number;
+                foresights_count: number;
+                recent_episodes: Array<{
+                    id: string;
+                    user_id: string;
+                    summary: string;
+                    episode?: string;
+                    timestamp: string;
+                    subject?: string;
+                    metadata?: Record<string, unknown>;
+                }>;
+                recent_foresights: Array<{
+                    id: string;
+                    user_id: string;
+                    content: string;
+                    evidence?: string;
+                    parent_episode_id?: string;
+                    metadata?: Record<string, unknown>;
+                }>;
+            }>;
+            memoryGetEpisodes?: (userId: string, limit?: number, offset?: number) => Promise<Array<{
+                id: string;
+                user_id: string;
+                summary: string;
+                episode?: string;
+                timestamp: string;
+                subject?: string;
+                metadata?: Record<string, unknown>;
+            }>>;
+            memoryGetEventLogs?: (userId: string, limit?: number, offset?: number) => Promise<Array<{
+                id: string;
+                user_id: string;
+                atomic_fact: string;
+                timestamp: string;
+                parent_episode_id?: string;
+                metadata?: Record<string, unknown>;
+            }>>;
+            memoryGetForesights?: (userId: string, limit?: number) => Promise<Array<{
+                id: string;
+                user_id: string;
+                content: string;
+                evidence?: string;
+                parent_episode_id?: string;
+                metadata?: Record<string, unknown>;
+            }>>;
 
             // MCP (Model Context Protocol) APIs
             mcpGetClaudeConfig: () => Promise<object>;
@@ -115,6 +185,68 @@ declare global {
                 serverPath: string | null;
             }>;
             mcpCopyConfig: () => Promise<string>;
+            
+            // MCP Connection Management APIs
+            mcpListConnections: () => Promise<{
+                name: string;
+                key: string;
+                createdAt: string;
+                lastUsedAt: string | null;
+                isActive: boolean;
+            }[]>;
+            mcpCreateConnection: (name: string) => Promise<{
+                success: boolean;
+                connection?: {
+                    name: string;
+                    key: string;
+                    createdAt: string;
+                    lastUsedAt: string | null;
+                    isActive: boolean;
+                };
+                error?: string;
+            }>;
+            mcpRevokeConnection: (key: string) => Promise<{ success: boolean; error?: string }>;
+            mcpSetConnectionActive: (key: string, isActive: boolean) => Promise<{ success: boolean; isActive?: boolean; error?: string }>;
+            mcpRenameConnection: (key: string, newName: string) => Promise<{ success: boolean; name?: string; error?: string }>;
+            mcpGetClaudeConnection: () => Promise<{
+                connected: boolean;
+                key?: string;
+                createdAt?: string;
+                lastUsedAt?: string | null;
+            }>;
+
+            // ========================================
+            // Privacy APIs
+            // ========================================
+            
+            // Update file privacy level (normal | private)
+            setFilePrivacy: (fileId: string, privacyLevel: 'normal' | 'private') => Promise<{
+                fileId: string;
+                privacyLevel: 'normal' | 'private';
+                updated: boolean;
+            }>;
+            
+            // Get file privacy level
+            getFilePrivacy: (fileId: string) => Promise<{
+                fileId: string;
+                privacyLevel: 'normal' | 'private';
+            }>;
+            
+            // Update folder privacy level (with option to apply to all files)
+            setFolderPrivacy: (folderId: string, privacyLevel: 'normal' | 'private', applyToFiles?: boolean) => Promise<{
+                folderId: string;
+                privacyLevel: 'normal' | 'private';
+                updated: boolean;
+                filesUpdated: number;
+            }>;
+            
+            // Get folder privacy level and file counts
+            getFolderPrivacy: (folderId: string) => Promise<{
+                folderId: string;
+                privacyLevel: 'normal' | 'private';
+                filesNormal: number;
+                filesPrivate: number;
+            }>;
         };
     }
 }

@@ -9,6 +9,7 @@
 [![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)]()
 [![Privacy](https://img.shields.io/badge/Privacy-100%25%20Local-success.svg)]()
 [![Powered by](https://img.shields.io/badge/Powered%20by-llama.cpp-blueviolet.svg)](https://github.com/ggerganov/llama.cpp)
+[![i18n](https://img.shields.io/badge/i18n-8%20Languages-blue.svg)](./INTERNATIONALIZATION.md)
 
 </div>
 
@@ -19,16 +20,16 @@
 🧠 Each file turns into memory. Memories form context.
 Context sparks insight. Insight powers action.
 
-🔒 No external eyes. No data leaving. Just your computer learning you better, helping you smarter.
+🔒 No externals eyes. No data leaving. Just your computer learning you better, helping you smarter.
 
 ### 🎬 Live Demos
 
 <div align="center">
 
-| 🔍 **File Retrieval** | 📊 **Year-End Report** | ⌨️ **Global Shortcuts** |
-| :---: | :---: | :---: |
-| <video src="https://github.com/user-attachments/assets/f3e60c7b-9f32-4507-a02b-b52a1fdb0b40" width="300" controls></video> | <video src="https://github.com/user-attachments/assets/57902642-e042-47c2-89d4-b6dc0b0a71ad" width="300" controls></video> | <video src="https://github.com/user-attachments/assets/63c1634a-bb93-443d-ad12-2ce0c631a3b6" width="300" controls></video> |
-| *Instantly chat with your local files* | *Scan 2025 files for insights* | *Access Synvo anywhere* |
+|                                                     🔍 **File Retrieval**                                                     |                                                   📊 **Year-End Report**                                                    |                                                    ⌨️ **Global Shortcuts**                                                    |
+| :--------------------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------: |
+| <a href="https://vimeo.com/1151769782"><img src="https://vumbnail.com/1151769782.jpg" width="100%" alt="Retrieval Demo"></a> | <a href="#"><img src="https://placehold.co/600x400/202020/FFFFFF/png?text=Coming+Soon" width="100%" alt="Report Demo"></a> | <a href="#"><img src="https://placehold.co/600x400/202020/FFFFFF/png?text=Coming+Soon" width="100%" alt="Shortcut Demo"></a> |
+|                                            *Instantly chat with your local files*                                            |                                               *Scan 2025 files for insights*                                               |                                                   *Access Synvo anywhere*                                                    |
 
 </div>
 
@@ -62,12 +63,12 @@ npm install
 # Backend / RAG Agent (macOS/Linux)
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r services/local_rag_agent/requirements.txt
+pip install -r services/app/requirements.txt
 
 # Backend / RAG Agent (Windows PowerShell)
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r services/local_rag_agent/requirements.txt
+pip install -r services/app/requirements.txt
 ```
 
 ### Step 3: Download Local Models
@@ -123,6 +124,23 @@ cp build/bin/llama-server bin/llama-server
 cd ../..
 ```
 
+### Step 5: Build Whisper Server (Speech-to-Text)
+
+To enable transcriptions:
+
+```bash
+# In runtime folder
+cd runtime
+git clone https://github.com/ggml-org/whisper.cpp.git whisper-cpp
+cd whisper-cpp
+cmake -B build
+cmake --build build -j --config Release
+mv build/bin ./
+# The app expects the binary at runtime/whisper-cpp/bin/whisper-server
+# For Windows, check build/bin/Release/whisper-server.exe
+cd ../..
+```
+
 ### 🏃 Run in Development Mode
 
 Ensure your Python virtual environment is active, then run:
@@ -146,7 +164,7 @@ This launches the **React Dev Server**, **Electron client**, and **FastAPI backe
 ### 🛡️ Privacy First
 
 - **🔐 Fully Local Privacy**: All inference, indexing, and retrieval run entirely on your device with zero data leaving.
-  - 💡 **Pro Tip**: If you verify network activity using tools like **Little Snitch** (macOS) or **GlassWire** (Windows), you'll confirm that no personal data leaves your device.
+  - *💡 **Pro Tip**: If you verify network activity using tools like **Little Snitch** (macOS) or **GlassWire** (Windows), you'll confirm that no personal data leaves your device.
 
 ### 🧠 Core Intelligence
 
@@ -167,32 +185,28 @@ This launches the **React Dev Server**, **Electron client**, and **FastAPI backe
 
 ## 🏗️ Architecture Overview
 
-Local Cocoa runs entirely on your device.
-
-**Frontend**: Electron • React • TypeScript • TailwindCSS.  
-**Backend**: FastAPI • llama.cpp • Qdrant.  
-**Algorithm**: Standard Local RAG + On-device LLM (Qwen3 series).
+Local Cocoa runs entirely on your device. It combines file ingestion, intelligent chunking, and local retrieval to build a private on-device knowledge system.
 
 <div align="center">
   <img src="assets/architecture/architecture.png" width="800" alt="Local Cocoa Architecture Diagram">
 </div>
+
+**Frontend**: Electron • React • TypeScript • TailwindCSS  
+**Backend**: FastAPI • llama.cpp • Qdrant
+
+
+
 
 
 ## 🎯 The Ultimate Goal of Local Cocoa
 <div align="center">
   <img src="assets/vision/vision.png" width="800" alt="Local Cocoa Vision Diagram">
 </div>
+We're actively developing these features—contributions welcome!
 
-**Local Cocoa is an on-device context core for your digital life.**
-
-It runs locally on your machine, reads what you choose to connect (files, email, chat, calendars, browsing traces), and turns them into **structured, referenceable memory** — so you can recall, organize, and act with reliable context.
-
-Local Cocoa also serves as a **safe context gateway** for external workflows and AI agents. Agents can request help for a task, but Local Cocoa only provides the **minimum necessary context**, protected by policy and designed to keep your private data under your control.
-
-We’re also building toward **portable trusted memory** — letting users and AI agents carry their context to devices they trust (like another personal device or a home robot), while staying in their control.
-
-**On-device by design. Private by default.**
-
+- [ ] **👑 More Connectors**: Google Drive, Notion, Slack integration
+- [ ] **🎤 Voice Mode**: Local speech-to-text for voice interaction
+- [ ] **🔌 Plugin Ecosystem**: Open API for community tools and agents
 
 ## ✨ Contributors
 
@@ -214,11 +228,20 @@ We’re also building toward **portable trusted memory** — letting users and A
   <img src="https://github.com/KairuiHu.png?size=100" width="50px" alt="KairuiHu" />
 </a>
 
-### 🌍 Community Contributors
+<!-- ### 🌍 Community Contributors
 
-<!-- <a href="https://github.com/synvo-ai/local-cocoa/graphs/contributors">
+<a href="https://github.com/synvo-ai/local-cocoa/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=synvo-ai/local-cocoa" />
 </a> -->
+
+## 🌍 Internationalization
+
+Local Cocoa supports **8 languages** out of the box:
+
+🇬🇧 English • 🇨🇳 简体中文 • 🇯🇵 日本語 • 🇰🇷 한국어 • 🇫🇷 Français • 🇩🇪 Deutsch • 🇪🇸 Español • 🇷🇺 Русский
+
+**Quick Start**: [INTERNATIONALIZATION.md](./INTERNATIONALIZATION.md)  
+**Full Documentation**: [docs/i18n/](./docs/i18n/)
 
 ## 🤝 Contributing
 
@@ -230,9 +253,22 @@ We welcome contributions of all kinds—bug fixes, features, or documentation im
 
 1.  Fork the repository
 2.  Create your feature branch (`git checkout -b feature/amazing-feature`)
-3.  Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4.  Push to the branch (`git push origin feature/amazing-feature`)
-5.  Open a Pull Request
+3.  Make your changes
+4.  Commit your changes (`git commit -m 'feat: add amazing feature'`)
+    - 🔍 **Pre-commit hooks** will automatically check your code for errors
+    - Run `npm run lint:fix` to auto-fix common issues
+5.  Push to the branch (`git push origin feature/amazing-feature`)
+6.  Open a Pull Request
+
+### Code Quality
+
+This project enforces code quality through automated pre-commit hooks:
+
+- ✅ **ESLint** checks for unused imports/variables and coding standards
+- ✅ **TypeScript** ensures type safety
+- ✅ Commits are blocked if errors are found
+
+See [CONTRIBUTING.md](CONTRIBUTING.md#code-quality) for details.
 
 Thank you to everyone who has contributed to Local Cocoa! 🙏
 

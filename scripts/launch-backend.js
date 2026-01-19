@@ -47,21 +47,22 @@ const env = {
     ...process.env,
     NO_PROXY: 'localhost,127.0.0.1,::1',
     no_proxy: 'localhost,127.0.0.1,::1',
-    PYTHONPATH: path.join(rootDir, 'services') // Absolute path is safer
+    PYTHONPATH: rootDir, // Absolute path is safer for refactored services
+    LOCAL_COCOA_DEV_MODE: '1' // Enable dev mode file fallback
 };
 
 
 // Arguments for uvicorn
 const posix = (value) => value.replace(/\\/g, '/');
 const reloadDirs = [
-    path.join(rootDir, 'services', 'local_rag_agent'),
+    path.join(rootDir, 'services'),
     path.join(rootDir, 'config')
 ].filter((dir) => fs.existsSync(dir));
 
 
 const args = [
     '-m', 'uvicorn',
-    'local_rag_agent.app:app',
+    'services.app.app:app',
     '--host', process.env.LOCAL_RAG_HOST,
     '--port', process.env.LOCAL_RAG_PORT,
     '--reload'

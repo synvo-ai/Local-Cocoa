@@ -1,0 +1,143 @@
+{
+  "app": {
+    "name": "Local Cocoa",
+    "tagline": "개인 AI 워크스페이스"
+  },
+  "common": {
+    "search": "검색",
+    "cancel": "취소",
+    "save": "저장",
+    "delete": "삭제",
+    "edit": "편집",
+    "close": "닫기",
+    "loading": "로딩 중...",
+    "error": "오류",
+    "success": "성공",
+    "confirm": "확인",
+    "back": "뒤로",
+    "next": "다음",
+    "finish": "완료",
+    "settings": "설정",
+    "language": "언어"
+  },
+  "startup": {
+    "connecting": "서비스에 연결 중...",
+    "startingBackend": "백엔드 서비스 시작 중...",
+    "modelsReady": "모델 준비 완료",
+    "welcome": "Local Cocoa에 오신 것을 환영합니다"
+  },
+  "onboarding": {
+    "welcome": "환영합니다!",
+    "welcomeDescription": "기기에서 완전히 실행되는 개인 AI 워크스페이스입니다. 데이터는 절대 외부로 나가지 않습니다.",
+    "private": "100% 프라이빗",
+    "runsLocally": "로컬 실행",
+    "allYourFiles": "모든 파일",
+    "aiPowered": "AI 기반",
+    "downloadModels": "AI 모델 다운로드",
+    "downloadDescription": "AI 모델을 다운로드하는 동안 잠시 기다려 주세요. 이 작업은 한 번만 수행됩니다.",
+    "allSet": "준비 완료!",
+    "allSetDescription": "모든 AI 모델이 준비되었습니다. 이제 Local Cocoa를 최대한 활용할 수 있습니다."
+  },
+  "chat": {
+    "title": "워크스페이스에 질문하기",
+    "placeholder": "메시지를 입력하세요...",
+    "howCanIHelp": "오늘 무엇을 도와드릴까요?",
+    "helpDescription": "워크스페이스 문서를 검색, 분석 및 요약하는 데 도움을 드릴 수 있습니다.",
+    "newConversation": "새 대화",
+    "resetConversation": "대화 초기화"
+  },
+  "knowledge": {
+    "title": "지식 베이스",
+    "folders": "폴더",
+    "files": "파일",
+    "addFolder": "폴더 추가",
+    "addFile": "파일 추가",
+    "removeFolder": "폴더 제거",
+    "rescanFolder": "다시 스캔",
+    "reindexFolder": "다시 인덱싱",
+    "indexed": "인덱싱됨",
+    "pending": "대기 중"
+  },
+  "search": {
+    "searching": "검색 중...",
+    "searchComplete": "검색 완료",
+    "noResults": "결과를 찾을 수 없습니다",
+    "stages": {
+      "filename": "파일 이름 검색 중...",
+      "summary": "요약 검색 중...",
+      "metadata": "메타데이터 검색 중...",
+      "hybrid": "심층 시맨틱 검색...",
+      "complete": "검색 완료"
+    }
+  },
+  "indexing": {
+    "indexing": "인덱싱 중...",
+    "paused": "일시 중지됨",
+    "starting": "시작 중...",
+    "scanning": "스캔 중...",
+    "processing": "처리 중...",
+    "fastMode": "빠른 모드",
+    "deepMode": "심층 모드",
+    "pause": "일시 중지",
+    "resume": "재개",
+    "stop": "중지"
+  },
+  "models": {
+    "title": "모델 관리",
+    "activeModel": "활성 모델",
+    "availableModels": "사용 가능한 모델",
+    "downloadModel": "모델 다운로드",
+    "modelSettings": "모델 설정",
+    "contextSize": "컨텍스트 크기",
+    "visionPerformance": "비전 성능",
+    "maxResolution": "최대 해상도"
+  },
+  "settings": {
+    "title": "설정",
+    "subtitle": "애플리케이션 환경설정 관리",
+    "general": "일반",
+    "models": "모델",
+    "retrievalIndexing": "검색 및 인덱싱",
+    "security": "보안",
+    "scanScope": "스캔 범위",
+    "plugins": "플러그인",
+    "language": "언어",
+    "languageDescription": "선호하는 언어를 선택하세요",
+    "theme": "테마",
+    "appearance": "외관",
+    "skin": "스킨",
+    "skinDescription": "인터페이스의 비주얼 스타일 선택",
+    "systemHealth": "시스템 상태",
+    "light": "라이트",
+    "dark": "다크",
+    "system": "시스템 설정",
+    "diagnostics": "진단 및 지원"
+  },
+  "notifications": {
+    "contextTooLarge": "이 요청은 모델 컨텍스트 윈도우에 비해 너무 큽니다. 비전 성능(최대 해상도)을 낮추거나 모델의 컨텍스트 크기를 늘려보세요.",
+    "folderAdded": "폴더가 성공적으로 추가되었습니다",
+    "folderRemoved": "폴더가 성공적으로 제거되었습니다",
+    "indexingStarted": "인덱싱이 시작되었습니다",
+    "indexingComplete": "인덱싱이 완료되었습니다",
+    "errorOccurred": "오류가 발생했습니다"
+  },
+  "extensions": {
+    "title": "확장 기능",
+    "plugins": "플러그인",
+    "email": "이메일",
+    "notes": "노트",
+    "activity": "활동"
+  },
+  "scan": {
+    "title": "빠른 스캔",
+    "description": "수정 날짜별로 파일 스캔"
+  },
+  "mbti": {
+    "title": "MBTI 분석",
+    "startAnalysis": "분석 시작",
+    "stopAnalysis": "분석 중지",
+    "analyzing": "분석 중...",
+    "generatingReport": "보고서 생성 중..."
+  }
+}
+

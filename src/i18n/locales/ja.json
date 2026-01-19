@@ -1,0 +1,143 @@
+{
+  "app": {
+    "name": "Local Cocoa",
+    "tagline": "プライベートなAIワークスペース"
+  },
+  "common": {
+    "search": "検索",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "delete": "削除",
+    "edit": "編集",
+    "close": "閉じる",
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "success": "成功",
+    "confirm": "確認",
+    "back": "戻る",
+    "next": "次へ",
+    "finish": "完了",
+    "settings": "設定",
+    "language": "言語"
+  },
+  "startup": {
+    "connecting": "サービスに接続中...",
+    "startingBackend": "バックエンドサービスを開始中...",
+    "modelsReady": "モデル準備完了",
+    "welcome": "Local Cocoaへようこそ"
+  },
+  "onboarding": {
+    "welcome": "ようこそ！",
+    "welcomeDescription": "完全にデバイス上で動作するプライベートAIワークスペース。データは決して外部に送信されません。",
+    "private": "100%プライベート",
+    "runsLocally": "ローカル実行",
+    "allYourFiles": "全てのファイル",
+    "aiPowered": "AI搭載",
+    "downloadModels": "AIモデルのダウンロード",
+    "downloadDescription": "AIモデルをダウンロード中です。これは最初の1回のみです。",
+    "allSet": "準備完了！",
+    "allSetDescription": "全てのAIモデルの準備が整いました。Local Cocoaを最大限にご利用いただけます。"
+  },
+  "chat": {
+    "title": "ワークスペースに質問",
+    "placeholder": "メッセージを入力...",
+    "howCanIHelp": "今日はどのようなお手伝いができますか？",
+    "helpDescription": "ワークスペースドキュメントの検索、分析、要約をお手伝いします。",
+    "newConversation": "新しい会話",
+    "resetConversation": "会話をリセット"
+  },
+  "knowledge": {
+    "title": "ナレッジベース",
+    "folders": "フォルダ",
+    "files": "ファイル",
+    "addFolder": "フォルダを追加",
+    "addFile": "ファイルを追加",
+    "removeFolder": "フォルダを削除",
+    "rescanFolder": "再スキャン",
+    "reindexFolder": "再インデックス",
+    "indexed": "インデックス済み",
+    "pending": "保留中"
+  },
+  "search": {
+    "searching": "検索中...",
+    "searchComplete": "検索完了",
+    "noResults": "結果が見つかりません",
+    "stages": {
+      "filename": "ファイル名を検索中...",
+      "summary": "要約を検索中...",
+      "metadata": "メタデータを検索中...",
+      "hybrid": "ディープセマンティック検索...",
+      "complete": "検索完了"
+    }
+  },
+  "indexing": {
+    "indexing": "インデックス作成中...",
+    "paused": "一時停止中",
+    "starting": "開始中...",
+    "scanning": "スキャン中...",
+    "processing": "処理中...",
+    "fastMode": "高速モード",
+    "deepMode": "詳細モード",
+    "pause": "一時停止",
+    "resume": "再開",
+    "stop": "停止"
+  },
+  "models": {
+    "title": "モデル管理",
+    "activeModel": "アクティブモデル",
+    "availableModels": "利用可能なモデル",
+    "downloadModel": "モデルをダウンロード",
+    "modelSettings": "モデル設定",
+    "contextSize": "コンテキストサイズ",
+    "visionPerformance": "ビジョンパフォーマンス",
+    "maxResolution": "最大解像度"
+  },
+  "settings": {
+    "title": "設定",
+    "subtitle": "アプリケーション設定を管理",
+    "general": "一般",
+    "models": "モデル",
+    "retrievalIndexing": "検索とインデックス",
+    "security": "セキュリティ",
+    "scanScope": "スキャン範囲",
+    "plugins": "プラグイン",
+    "language": "言語",
+    "languageDescription": "お好みの言語を選択してください",
+    "theme": "テーマ",
+    "appearance": "外観",
+    "skin": "スキン",
+    "skinDescription": "インターフェースのビジュアルスタイルを選択",
+    "systemHealth": "システム状態",
+    "light": "ライト",
+    "dark": "ダーク",
+    "system": "システムに従う",
+    "diagnostics": "診断とサポート"
+  },
+  "notifications": {
+    "contextTooLarge": "このリクエストはモデルのコンテキストウィンドウに対して大きすぎます。ビジョンパフォーマンス（最大解像度）を下げるか、モデルのコンテキストサイズを増やしてください。",
+    "folderAdded": "フォルダが正常に追加されました",
+    "folderRemoved": "フォルダが正常に削除されました",
+    "indexingStarted": "インデックス作成を開始しました",
+    "indexingComplete": "インデックス作成が完了しました",
+    "errorOccurred": "エラーが発生しました"
+  },
+  "extensions": {
+    "title": "拡張機能",
+    "plugins": "プラグイン",
+    "email": "メール",
+    "notes": "ノート",
+    "activity": "アクティビティ"
+  },
+  "scan": {
+    "title": "クイックスキャン",
+    "description": "更新日でファイルをスキャン"
+  },
+  "mbti": {
+    "title": "MBTI分析",
+    "startAnalysis": "分析開始",
+    "stopAnalysis": "分析停止",
+    "analyzing": "分析中...",
+    "generatingReport": "レポート生成中..."
+  }
+}
+

@@ -1,4 +1,4 @@
-import { Plus, MessageSquare, Settings, Database, Activity, Trash2, HelpCircle, BarChart3, Zap } from 'lucide-react';
+import { Plus, MessageSquare, Settings, Database, Puzzle, Trash2, HelpCircle, BarChart3, User } from 'lucide-react';
 import { CSSProperties } from 'react';
 import { cn } from '../../lib/utils';
 import { useSkin } from '../skin-provider';
@@ -10,8 +10,8 @@ interface SidebarProps {
     onSelectSession: (id: string) => void;
     onCreateSession: () => void;
     onDeleteSession: (id: string) => void;
-    activeView: 'chat' | 'knowledge' | 'models' | 'settings' | 'activity' | 'scan';
-    onSelectView: (view: 'chat' | 'knowledge' | 'models' | 'settings' | 'activity' | 'scan') => void;
+    activeView: 'chat' | 'knowledge' | 'models' | 'settings' | 'extensions' | 'scan' | 'mbti' | 'memory';
+    onSelectView: (view: 'chat' | 'knowledge' | 'models' | 'settings' | 'extensions' | 'scan' | 'mbti' | 'memory') => void;
     onOpenIndexProgress?: () => void;
     isIndexing?: boolean;
     indexStatus?: IndexProgressUpdate['status'] | null;
@@ -165,22 +165,6 @@ export function Sidebar({
             </div>
             <div className="p-2 space-y-1">
                 <button
-                    onClick={() => onSelectView('scan')}
-                    className={cn(
-                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                        isCocoaSkin
-                            ? activeView === 'scan'
-                                ? "bg-[#3d2f1c]/50 text-[#e8d4bc]"
-                                : "text-[#c9a87c] hover:bg-[#3d2f1c]/30 hover:text-[#e8d4bc]"
-                            : activeView === 'scan'
-                                ? "bg-accent text-accent-foreground"
-                                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                    )}
-                >
-                    <Zap className="h-4 w-4" />
-                    Scan
-                </button>
-                <button
                     onClick={() => onSelectView('knowledge')}
                     className={cn(
                         "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
@@ -194,23 +178,39 @@ export function Sidebar({
                     )}
                 >
                     <Database className="h-4 w-4" />
-                    File System
+                    Files
                 </button>
                 <button
-                    onClick={() => onSelectView('activity')}
+                    onClick={() => onSelectView('memory')}
                     className={cn(
                         "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                         isCocoaSkin
-                            ? activeView === 'activity'
+                            ? activeView === 'memory'
                                 ? "bg-[#3d2f1c]/50 text-[#e8d4bc]"
                                 : "text-[#c9a87c] hover:bg-[#3d2f1c]/30 hover:text-[#e8d4bc]"
-                            : activeView === 'activity'
+                            : activeView === 'memory'
                                 ? "bg-accent text-accent-foreground"
                                 : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                     )}
                 >
-                    <Activity className="h-4 w-4" />
-                    Activities
+                    <User className="h-4 w-4" />
+                    Memory
+                </button>
+                <button
+                    onClick={() => onSelectView('extensions')}
+                    className={cn(
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                        isCocoaSkin
+                            ? activeView === 'extensions'
+                                ? "bg-[#3d2f1c]/50 text-[#e8d4bc]"
+                                : "text-[#c9a87c] hover:bg-[#3d2f1c]/30 hover:text-[#e8d4bc]"
+                            : activeView === 'extensions'
+                                ? "bg-accent text-accent-foreground"
+                                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    )}
+                >
+                    <Puzzle className="h-4 w-4" />
+                    Extensions
                 </button>
                 <button
                     onClick={() => onSelectView('settings')}

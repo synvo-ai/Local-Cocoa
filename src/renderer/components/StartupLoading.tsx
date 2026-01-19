@@ -24,7 +24,7 @@ export function StartupLoading({ onOpenModelManager, statusMessage, modelsReady 
             {/* Decorative background circles */}
             <div className="absolute top-1/4 -left-20 w-64 h-64 bg-amber-200/20 dark:bg-amber-800/10 rounded-full blur-3xl" />
             <div className="absolute bottom-1/4 -right-20 w-64 h-64 bg-orange-200/20 dark:bg-orange-800/10 rounded-full blur-3xl" />
-            
+
             <div className="absolute top-0 left-0 right-0 h-12 z-50" style={{ WebkitAppRegion: 'drag' } as any} />
             <div className="flex flex-col items-center gap-8 p-8 animate-in fade-in duration-700 relative z-10">
                 <div className="relative">
@@ -61,7 +61,7 @@ export function StartupLoading({ onOpenModelManager, statusMessage, modelsReady 
                             <p className="text-sm text-muted-foreground max-w-sm text-center leading-relaxed">
                                 Local Cocoa runs AI entirely on your device.
                                 <br />
-                                Let's download the models you'll need.
+                                Let&apos;s download the models you&apos;ll need.
                             </p>
                             <button
                                 onClick={onOpenModelManager}

@@ -12,11 +12,17 @@ export type FileKind =
 
 export type FileIndexStatus = 'pending' | 'indexed' | 'error';
 
+// Stage status for two-round indexing
+// 0 = pending, 1 = text done, 2 = embed done, -1 = error, -2 = skipped (deep only)
+export type StageValue = 0 | 1 | 2 | -1 | -2;
+
 export interface FailedFile {
     path: string;
     reason: string;
     timestamp: string;
 }
+
+export type PrivacyLevel = 'normal' | 'private';
 
 export interface FolderRecord {
     id: string;
@@ -28,6 +34,7 @@ export interface FolderRecord {
     enabled: boolean;
     failedFiles?: FailedFile[];
     indexedCount?: number;
+    privacyLevel?: PrivacyLevel;
 }
 
 export interface MonitoredFolder extends FolderRecord { }
@@ -44,10 +51,24 @@ export interface FileRecord {
     kind: FileKind;
     summary?: string | null;
     metadata?: Record<string, unknown>;
-    // Index status tracking
+    // Index status tracking (legacy)
     indexStatus?: FileIndexStatus;
     errorReason?: string | null;
     errorAt?: string | null;
+    
+    // Two-round indexing stages
+    // Round 1 (Fast): 0=pending, 1=text_done, 2=embed_done, -1=error
+    fastStage?: StageValue;
+    fastTextAt?: string | null;
+    fastEmbedAt?: string | null;
+    
+    // Round 2 (Deep): 0=pending, 1=text_done, 2=embed_done, -1=error, -2=skipped
+    deepStage?: StageValue;
+    deepTextAt?: string | null;
+    deepEmbedAt?: string | null;
+    
+    // Privacy level
+    privacyLevel?: PrivacyLevel;
 }
 
 export interface IndexedFile extends FileRecord {
@@ -106,7 +127,7 @@ export interface IndexingItem {
     detail?: string | null;
     stepCurrent?: number | null;
     stepTotal?: number | null;
-    recentEvents?: Array<{ ts: string; type?: string; message: string; [key: string]: any }>;
+    recentEvents?: Array<{ ts: string; type?: string; message: string;[key: string]: any }>;
 }
 
 export interface IndexInventory {
@@ -197,6 +218,74 @@ export interface QaResponse {
     diagnostics?: AgentDiagnostics;
 }
 
+export type EmailProtocol = 'imap' | 'pop3' | 'outlook';
+
+export interface EmailAccountPayload {
+    label: string;
+    protocol: EmailProtocol;
+    host?: string;
+    port?: number;
+    username?: string;
+    password?: string;
+    useSsl?: boolean;
+    folder?: string;
+    // Outlook
+    clientId?: string;
+    tenantId?: string;
+}
+
+export interface EmailAccountSummary {
+    id: string;
+    label: string;
+    protocol: EmailProtocol;
+    host?: string;
+    port: number;
+    username?: string;
+    useSsl: boolean;
+    folder?: string | null;
+    enabled: boolean;
+    createdAt: string;
+    updatedAt: string;
+    lastSyncedAt?: string | null;
+    lastSyncStatus?: string | null;
+    totalMessages: number;
+    recentNewMessages: number;
+    folderId: string;
+    folderPath: string;
+    // Outlook
+    clientId?: string;
+    tenantId?: string;
+}
+
+export interface EmailSyncResult {
+    accountId: string;
+    folderId: string;
+    folderPath: string;
+    newMessages: number;
+    totalMessages: number;
+    indexed: number;
+    lastSyncedAt: string;
+    status: 'ok' | 'error';
+    message?: string | null;
+}
+
+export interface EmailMessageSummary {
+    id: string;
+    accountId: string;
+    subject?: string | null;
+    sender?: string | null;
+    recipients: string[];
+    sentAt?: string | null;
+    storedPath: string;
+    size: number;
+    createdAt: string;
+    preview?: string | null;
+}
+
+export interface EmailMessageContent extends EmailMessageSummary {
+    markdown: string;
+}
+
 export interface NoteSummary {
     id: string;
     title: string;
@@ -267,6 +356,29 @@ export interface ThinkingStepHit {
     analysisConfidence?: number;
 }
 
+// Rich chunk reference for clickable display
+export interface ChunkReference {
+    chunkId?: string | null;
+    fileId: string;
+    score: number;
+    snippet?: string;
+    metadata?: Record<string, unknown>;
+    // Verification results if available
+    confidence?: number;
+    isRelevant?: boolean;
+    extractedAnswer?: string;
+}
+
+// Verification result from LLM
+export interface VerificationResult {
+    chunkId?: string | null;
+    fileId: string;
+    confidence: number;
+    isRelevant: boolean;
+    extractedAnswer?: string;
+    snippet?: string;
+}
+
 export interface ThinkingStep {
     id: string;
     type: 'decompose' | 'subquery' | 'search' | 'analyze' | 'merge' | 'synthesize' | 'info';
@@ -278,6 +390,7 @@ export interface ThinkingStep {
     hits?: ThinkingStepHit[];
     subQuery?: string;
     subQueryAnswer?: string;  // Answer generated for this sub-query
+    timestampMs?: number;  // Time since start of operation in ms
     metadata?: {
         subQueryIndex?: number;
         totalSubQueries?: number;
@@ -285,6 +398,17 @@ export interface ThinkingStep {
         relevantCount?: number;
         strategy?: string;
         sources?: string[];
+        // New rich metadata fields
+        sub_query_id?: string;
+        sub_query?: string;
+        sub_queries?: Array<{ id: string; text: string }>;
+        keywords?: string[];
+        method?: string;
+        candidates?: ChunkReference[];
+        verification_results?: VerificationResult[];
+        best_answer?: string;
+        confidence?: number;
+        chunks?: ChunkReference[];
     };
 }
 
@@ -311,6 +435,9 @@ export interface ConversationMessage {
     thinkingSteps?: ThinkingStep[];
     isMultiPath?: boolean;
     analysisProgress?: AnalysisProgress;
+    needsUserDecision?: boolean;
+    resumeToken?: string | null;
+    decisionMessage?: string;
 }
 
 export interface ChatSession {
@@ -321,7 +448,7 @@ export interface ChatSession {
 }
 
 export type IndexOperationMode = 'rescan' | 'reindex';
-export type IndexScope = 'global' | 'folder' | 'notes';
+export type IndexScope = 'global' | 'folder' | 'email' | 'notes';
 
 export interface RunIndexOptions {
     mode?: IndexOperationMode;
@@ -330,7 +457,29 @@ export interface RunIndexOptions {
     refreshEmbeddings?: boolean;
     dropCollection?: boolean;
     purgeFolders?: string[];
-    indexing_mode?: 'fast' | 'fine';
+    indexing_mode?: 'fast' | 'deep';
+}
+
+// Stage progress statistics for UI display
+export interface StageProgressStats {
+    fastPending: number;
+    fastTextDone: number;
+    fastEmbedDone: number;
+    fastError: number;
+    deepPending: number;
+    deepTextDone: number;
+    deepEmbedDone: number;
+    deepSkipped: number;
+    deepError: number;
+    total: number;
+}
+
+// Modality-grouped statistics
+export interface ModalityStats {
+    kind: FileKind;
+    fileCount: number;
+    totalSize: number;
+    stageProgress: StageProgressStats;
 }
 
 export interface SystemSpecs {

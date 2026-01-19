@@ -3,7 +3,9 @@ import type { IndexResultSnapshot } from '../types';
 interface SummaryCardsProps {
     snapshot: IndexResultSnapshot | null;
     backendStatus: string;
+    emailStatus?: { processing: number; pending: number };
     noteStatus?: { processing: number; pending: number };
+    emailIndexedCount?: number;
     noteIndexedCount?: number;
     generalPendingCount?: number;
 }
@@ -19,7 +21,9 @@ function readableSize(bytes: number): string {
 export function SummaryCards({
     snapshot,
     backendStatus,
+    emailStatus,
     noteStatus,
+    emailIndexedCount,
     noteIndexedCount,
     generalPendingCount
 }: SummaryCardsProps) {
@@ -37,12 +41,14 @@ export function SummaryCards({
     }
 
     const { totalCount, totalSize, completedAt, byKind } = snapshot;
+    const mailStatus = emailStatus ?? { processing: 0, pending: 0 };
     const notesStatus = noteStatus ?? { processing: 0, pending: 0 };
+    const emailIndexed = emailIndexedCount ?? 0;
     const noteIndexed = noteIndexedCount ?? 0;
     const generalPending = generalPendingCount ?? 0;
 
     const rawDocumentIndexed = (byKind.document ?? 0) as number;
-    const documentIndexed = Math.max(0, rawDocumentIndexed - noteIndexed);
+    const documentIndexed = Math.max(0, rawDocumentIndexed - emailIndexed - noteIndexed);
     const documentTotal = documentIndexed + Math.max(0, generalPending);
 
     const imageIndexed = (byKind.image ?? 0) as number;
@@ -56,7 +62,9 @@ export function SummaryCards({
         (byKind.other ?? 0) + (byKind.archive ?? 0) + (byKind.presentation ?? 0)
     );
 
+    const emailPendingTotal = mailStatus.processing + mailStatus.pending;
     const notePendingTotal = notesStatus.processing + notesStatus.pending;
+    const emailTotal = emailIndexed + emailPendingTotal;
     const notesTotal = noteIndexed + notePendingTotal;
 
     const combinedTotalCount = totalCount + noteIndexed;
@@ -66,6 +74,7 @@ export function SummaryCards({
         { key: 'code', label: 'Code', indexed: codeIndexed, total: codeIndexed },
         { key: 'books', label: 'Books', indexed: bookIndexed, total: bookIndexed },
         { key: 'images', label: 'Images', indexed: imageIndexed, total: imageIndexed },
+        { key: 'email', label: 'Email', indexed: emailIndexed, total: emailTotal },
         { key: 'notes', label: 'Notes', indexed: noteIndexed, total: notesTotal },
         { key: 'video', label: 'Video', indexed: videoIndexed, total: videoIndexed },
         { key: 'audio', label: 'Audio', indexed: audioIndexed, total: audioIndexed },

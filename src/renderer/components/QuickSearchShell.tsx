@@ -33,7 +33,12 @@ export function QuickSearchShell() {
     // Track when each file was first seen (fileId -> latencyMs)
     const [fileFirstSeenMs, setFileFirstSeenMs] = useState<Record<string, number>>({});
     const pendingRequestIdRef = useRef(0);
+
     const cancelStreamRef = useRef<(() => void) | null>(null);
+
+    // Progressive search state
+    const [needsUserDecision, setNeedsUserDecision] = useState(false);
+    const [resumeToken, setResumeToken] = useState<string | null>(null);
 
     // Tab state
     const [activeTab, setActiveTab] = useState<PaletteTab>('search');
@@ -70,7 +75,7 @@ export function QuickSearchShell() {
     const loadNotes = useCallback(async () => {
         const api = window.api;
         if (!api?.listNotes) return;
-        
+
         setIsNotesLoading(true);
         try {
             const notesList = await api.listNotes();
@@ -92,7 +97,7 @@ export function QuickSearchShell() {
     const handleSelectNote = useCallback(async (noteId: string) => {
         const api = window.api;
         if (!api?.getNote) return;
-        
+
         setSelectedNoteId(noteId);
         setIsNotesLoading(true);
         try {
@@ -114,7 +119,7 @@ export function QuickSearchShell() {
     const handleCreateNote = useCallback(async () => {
         const api = window.api;
         if (!api?.createNote) return;
-        
+
         try {
             const now = new Date();
             const defaultTitle = `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -131,7 +136,7 @@ export function QuickSearchShell() {
     const handleSaveNote = useCallback(async (noteId: string, payload: { title: string; body: string }) => {
         const api = window.api;
         if (!api?.updateNote) return;
-        
+
         setIsNoteSaving(true);
         try {
             const updated = await api.updateNote(noteId, payload);
@@ -149,7 +154,7 @@ export function QuickSearchShell() {
     const handleDeleteNote = useCallback(async (noteId: string) => {
         const api = window.api;
         if (!api?.deleteNote) return;
-        
+
         try {
             await api.deleteNote(noteId);
             setSelectedNoteId(null);
@@ -170,7 +175,7 @@ export function QuickSearchShell() {
     }, [notifyNotesChanged]);
 
     const runQuery = useCallback(
-        async (value: string, modeOverride?: SpotlightMode) => {
+        async (value: string, modeOverride?: SpotlightMode, resumeTokenArg?: string) => {
             const currentMode = modeOverride ?? mode;
             const requestId = ++pendingRequestIdRef.current;
             const trimmed = value.trim();
@@ -225,13 +230,19 @@ export function QuickSearchShell() {
                 setSearchContext(null);
                 setCurrentSearchStage(null);
                 setFileFirstSeenMs({});
+                setNeedsUserDecision(false);
+                setResumeToken(null);
             } else {
                 // QA Mode initialization
-                setQaAnswer('');
-                setResults([]);
-                setQaMeta(null);
-                setSearchContext(null);
-                setCurrentSearchStage(null);
+                if (!resumeTokenArg) {
+                    setQaAnswer('');
+                    setResults([]);
+                    setQaMeta(null);
+                    setSearchContext(null);
+                    setCurrentSearchStage(null);
+                }
+                setNeedsUserDecision(false);
+                setResumeToken(null);
             }
 
             try {
@@ -270,7 +281,7 @@ export function QuickSearchShell() {
                                             }
                                             // Update file timings state
                                             setFileFirstSeenMs({ ...fileTimings });
-                                            
+
                                             // Merge new hits with accumulated hits
                                             accumulatedHits = [...accumulatedHits, ...hits];
                                             setResults([...accumulatedHits]);
@@ -351,6 +362,13 @@ export function QuickSearchShell() {
                                     const msg = JSON.parse(line);
                                     if (msg.type === 'token') {
                                         setQaAnswer(prev => (prev || '') + msg.data);
+                                    } else if (msg.type === 'user_decision_required') {
+                                        setNeedsUserDecision(true);
+                                        setResumeToken(msg.resume_token || null);
+                                        if (msg.message) setStatusMessage(msg.message);
+                                        setIsSearching(false);
+                                        // Don't clear cancelStreamRef, or maybe we should?
+                                        // The backend pauses, but the stream is effectively done for now.
                                     } else if (msg.type === 'hits') {
                                         setResults(msg.data);
                                         setStatusMessage(`${msg.data.length} sources found.`);
@@ -368,8 +386,8 @@ export function QuickSearchShell() {
                                         setResults(prev => prev.map((hit, idx) => {
                                             // Match by chunk_id (most precise) or index
                                             // Do NOT use file_id alone - multiple chunks from same file would all match!
-                                            const hitChunkId = (hit as Record<string, unknown>).chunk_id || (hit as Record<string, unknown>).chunkId;
-                                            
+                                            const hitChunkId = (hit as any).chunk_id || (hit as any).chunkId;
+
                                             let matches = false;
                                             if (item.chunk_id && hitChunkId && item.chunk_id === hitChunkId) {
                                                 // Precise chunk_id match
@@ -378,7 +396,7 @@ export function QuickSearchShell() {
                                                 // Fallback to index-based matching
                                                 matches = true;
                                             }
-                                            
+
                                             if (matches) {
                                                 return {
                                                     ...hit,
@@ -450,7 +468,7 @@ export function QuickSearchShell() {
                             setIsSearching(false);
                             cancelStreamRef.current = null;
                         }
-                    });
+                    }, 'auto', resumeTokenArg);
                     cancelStreamRef.current = cancel;
                 }
             } catch (error) {
@@ -486,6 +504,8 @@ export function QuickSearchShell() {
         setQaMeta(null);
         setSearchContext(null);
         setStatusMessage('File search mode · type to search indexed files.');
+        setNeedsUserDecision(false);
+        setResumeToken(null);
         const hideSpotlight = window.api?.hideSpotlightWindow;
         if (hideSpotlight) {
             hideSpotlight();
@@ -579,10 +599,18 @@ export function QuickSearchShell() {
 
     const handleQueryChange = useCallback((newQuery: string) => {
         setQuery(newQuery);
+        setNeedsUserDecision(false);
+        setResumeToken(null);
         if (mode === 'qa') {
             setMode('rag');
         }
     }, [mode]);
+
+    const handleResumeSearch = useCallback(() => {
+        if (resumeToken) {
+            void runQuery(query, 'qa', resumeToken);
+        }
+    }, [resumeToken, query, runQuery]);
 
     return (
         <QuickSearchPalette
@@ -604,6 +632,9 @@ export function QuickSearchShell() {
                 setMode('qa');
                 void runQuery(value, 'qa');
             }}
+            needsUserDecision={needsUserDecision}
+            onResumeSearch={handleResumeSearch}
+            resumeToken={resumeToken}
             onSelect={handleSelect}
             onOpen={handleOpen}
             // Notes props

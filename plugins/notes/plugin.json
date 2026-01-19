@@ -1,0 +1,22 @@
+{
+    "id": "notes",
+    "name": "Notes",
+    "version": "1.0.0",
+    "description": "Create and manage notes with local storage and AI-powered search.",
+    "author": "Local Cocoa",
+    "category": "productivity",
+    "icon": "StickyNote",
+    "backend": {
+        "entrypoint": "router",
+        "requiresDatabase": true
+    },
+    "frontend": {
+        "tab": {
+            "id": "notes",
+            "label": "Notes",
+            "icon": "StickyNote",
+            "component": "NotesWorkspace"
+        }
+    }
+}
+

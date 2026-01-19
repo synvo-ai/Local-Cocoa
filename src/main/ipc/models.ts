@@ -68,6 +68,16 @@ export function registerModelHandlers(modelManager: ModelManager, serviceManager
             const modelPath = modelManager.getModelPath(newConfig.activeModelId);
             const descriptor = modelManager.getDescriptor(newConfig.activeModelId);
 
+            // Resolve mmproj path - use mmprojId from descriptor if available
+            let mmprojPath: string | undefined;
+            if (descriptor?.type === 'vlm' || descriptor?.id === 'vlm') {
+                if (descriptor.mmprojId) {
+                    mmprojPath = modelManager.getModelPath(descriptor.mmprojId);
+                } else {
+                    mmprojPath = modelManager.getModelPath('vlm-mmproj');
+                }
+            }
+
             await serviceManager.startService({
                 alias: 'vlm',
                 modelPath: modelPath,
@@ -76,7 +86,7 @@ export function registerModelHandlers(modelManager: ModelManager, serviceManager
                 threads: 4,
                 ngl: 999,
                 type: 'vlm',
-                mmprojPath: (descriptor?.type === 'vlm' || descriptor?.id === 'vlm') ? modelManager.getModelPath('vlm-mmproj') : undefined
+                mmprojPath: mmprojPath
             });
         }
 
@@ -110,6 +120,22 @@ export function registerModelHandlers(modelManager: ModelManager, serviceManager
                 ngl: 999,
                 type: 'reranking',
                 ubatchSize: 2048
+            });
+        }
+
+        // Restart whisper service if audio model changed
+        if (oldConfig.activeAudioModelId !== newConfig.activeAudioModelId) {
+            console.log('[Models IPC] Audio model changed, restarting whisper service...');
+            await serviceManager.stopService('whisper');
+            const audioModelId = newConfig.activeAudioModelId || 'whisper-small';
+            await serviceManager.startService({
+                alias: 'whisper',
+                modelPath: modelManager.getModelPath(audioModelId),
+                port: 8080,
+                contextSize: 0,
+                threads: 4,
+                ngl: 0,
+                type: 'whisper'
             });
         }
 

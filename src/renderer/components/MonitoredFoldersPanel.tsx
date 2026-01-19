@@ -9,8 +9,8 @@ interface MonitoredFoldersPanelProps {
     files?: IndexedFile[];
     onAdd: () => Promise<void>;
     onRemove: (folderId: string) => Promise<void>;
-    onRescan?: (folderId: string, mode?: 'fast' | 'fine') => Promise<void>;
-    onReindex?: (folderId: string, mode?: 'fast' | 'fine') => Promise<void>;
+    onRescan?: (folderId: string, mode?: 'fast' | 'deep') => Promise<void>;
+    onReindex?: (folderId: string, mode?: 'fast' | 'deep') => Promise<void>;
     onSelectFile?: (file: IndexedFile) => void;
     onOpenFile?: (file: IndexedFile) => void | Promise<void>;
     isIndexing?: boolean;
@@ -21,13 +21,13 @@ interface MonitoredFoldersPanelProps {
 }
 
 // Dropdown component for index actions
-function IndexDropdown({ 
-    label, 
-    options, 
-    onSelect, 
+function IndexDropdown({
+    label,
+    options,
+    onSelect,
     disabled,
     variant = 'default'
-}: { 
+}: {
     label: string;
     options: { label: string; value: string }[];
     onSelect: (value: string) => void;
@@ -51,7 +51,7 @@ function IndexDropdown({
 
     const handleToggle = () => {
         if (disabled) return;
-        
+
         if (!isOpen && buttonRef.current) {
             // Check if there's enough space below (menu height ~80px)
             const rect = buttonRef.current.getBoundingClientRect();
@@ -118,32 +118,32 @@ function getFileIndexMode(file: IndexedFile): IndexMode {
     // Check index status first
     if (file.indexStatus === 'error') return 'error';
     if (file.indexStatus === 'pending') return 'none';
-    
+
     const metadata = file.metadata as Record<string, unknown> | undefined;
     if (!metadata) return 'none';
-    
+
     // Check chunk_strategy which contains the indexing mode
     const chunkStrategy = metadata.chunk_strategy as string | undefined;
     if (chunkStrategy) {
         if (chunkStrategy.includes('_fine')) return 'deep';
         if (chunkStrategy.includes('_fast')) return 'fast';
     }
-    
+
     // Fallback to pdf_vision_mode
     const pdfVisionMode = metadata.pdf_vision_mode as string | undefined;
-    if (pdfVisionMode === 'fine') return 'deep';
+    if (pdfVisionMode === 'deep') return 'deep';
     if (pdfVisionMode === 'fast') return 'fast';
-    
+
     // If we have any chunk strategy, assume it's indexed
     if (chunkStrategy) return 'fast';
-    
+
     return 'none';
 }
 
 function IndexModeTag({ mode, errorReason, progress }: { mode: IndexMode; errorReason?: string | null; progress?: number | null }) {
     if (mode === 'error') {
         return (
-            <span 
+            <span
                 className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-destructive/10 text-destructive"
                 title={errorReason || 'Failed to index'}
             >
@@ -209,12 +209,12 @@ export function MonitoredFoldersPanel({
     const [isAdding, setIsAdding] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [confirming, setConfirming] = useState<string | null>(null);
-    const [folderModes, setFolderModes] = useState<Record<string, 'fast' | 'fine'>>({});
+    const [folderModes, setFolderModes] = useState<Record<string, 'fast' | 'deep'>>({});
     const [expandedFolderId, setExpandedFolderId] = useState<string | null>(null);
 
     // Normalize paths for comparison
     const normalizePath = (p: string) => p?.replace(/\\/g, '/').replace(/\/+$/, '') ?? '';
-    
+
     // Check if a file is being processed - using fileId, fileName, or path matching
     const isFileProcessing = useCallback((file: IndexedFile, items: IndexingItem[]) => {
         return items.some(item => {
@@ -231,30 +231,30 @@ export function MonitoredFoldersPanel({
             const fileFullPath = normalizePath(file.fullPath);
             const filePath = normalizePath(file.path);
             return (
-                itemPath === fileFullPath || 
-                itemPath === filePath || 
+                itemPath === fileFullPath ||
+                itemPath === filePath ||
                 itemPath.endsWith('/' + file.name)
             );
         });
     }, []);
-    
+
     // Get files for the expanded folder, sorted with processing first, then errors, then pending, then indexed
     const expandedFolderFiles = useMemo(() => {
         if (!expandedFolderId) return [];
-        
+
         const items = indexingItems ?? [];
-        
+
         return files
             .filter((file) => file.folderId === expandedFolderId)
             .sort((a, b) => {
                 // Check if files are being processed
                 const aProcessing = isFileProcessing(a, items);
                 const bProcessing = isFileProcessing(b, items);
-                
+
                 // Processing files come first
                 if (aProcessing && !bProcessing) return -1;
                 if (!aProcessing && bProcessing) return 1;
-                
+
                 // Sort by status: error > pending > indexed
                 const statusOrder = { error: 0, pending: 1, indexed: 2 };
                 const aStatus = a.indexStatus ?? 'indexed';
@@ -266,10 +266,10 @@ export function MonitoredFoldersPanel({
             });
     }, [expandedFolderId, files, indexingItems, isFileProcessing]);
 
-    const readStoredMode = (folderId: string): 'fast' | 'fine' => {
+    const readStoredMode = (folderId: string): 'fast' | 'deep' => {
         try {
             const stored = localStorage.getItem(`folder-mode-${folderId}`);
-            return stored === 'fine' ? 'fine' : 'fast';
+            return stored === 'deep' ? 'deep' : 'fast';
         } catch {
             return 'fast';
         }
@@ -278,7 +278,7 @@ export function MonitoredFoldersPanel({
     // Initialise/reset modes when the folder list changes; drop modes for removed folders.
     useEffect(() => {
         setFolderModes(() => {
-            const next: Record<string, 'fast' | 'fine'> = {};
+            const next: Record<string, 'fast' | 'deep'> = {};
             folders.forEach((folder) => {
                 next[folder.id] = readStoredMode(folder.id);
             });
@@ -286,7 +286,7 @@ export function MonitoredFoldersPanel({
         });
     }, [folders]);
 
-    const setFolderMode = (folderId: string, mode: 'fast' | 'fine') => {
+    const setFolderMode = (folderId: string, mode: 'fast' | 'deep') => {
         setFolderModes((prev) => ({ ...prev, [folderId]: mode }));
         try {
             localStorage.setItem(`folder-mode-${folderId}`, mode);
@@ -295,12 +295,12 @@ export function MonitoredFoldersPanel({
         }
     };
 
-    const resolveMode = (folderId: string): 'fast' | 'fine' => {
+    const resolveMode = (folderId: string): 'fast' | 'deep' => {
         return folderModes[folderId] ?? 'fast';
     };
 
     // Handle folder-level index all action
-    const handleIndexAll = (folderId: string, mode: 'fast' | 'fine') => {
+    const handleIndexAll = (folderId: string, mode: 'fast' | 'deep') => {
         setFolderMode(folderId, mode);
         if (onReindex) {
             void onReindex(folderId, mode);
@@ -310,12 +310,22 @@ export function MonitoredFoldersPanel({
     };
 
     // Handle single file index/reindex
-    const handleFileIndex = (filePath: string, mode: 'fast' | 'fine') => {
-        window.api?.runIndex?.({
-            mode: 'rescan',
-            files: [filePath],
-            indexing_mode: mode
-        });
+    // Use different API based on mode:
+    // - Fast: Use staged indexing (fast text extraction, no VLM)
+    // - Deep: Use legacy indexing with VLM processing
+    const handleFileIndex = (filePath: string, mode: 'fast' | 'deep') => {
+        if (mode === 'fast') {
+            window.api?.runStagedIndex?.({
+                files: [filePath],
+                mode: 'reindex', // Always use reindex to reset file stage
+            });
+        } else {
+            window.api?.runIndex?.({
+                mode: 'reindex',
+                files: [filePath],
+                indexing_mode: 'deep'
+            });
+        }
     };
 
     // Combine local error with global indexing error if relevant
@@ -407,7 +417,7 @@ export function MonitoredFoldersPanel({
                         const folderItems = indexingItems?.filter(item => item.folderId === folder.id) ?? [];
                         const processingItem = folderItems.find(item => item.status === 'processing');
                         const queuedCount = folderItems.length;
-                        
+
                         // Count files by status from the files list
                         const folderFiles = files.filter(f => f.folderId === folder.id);
                         const indexedFilesCount = folderFiles.filter(f => f.indexStatus === 'indexed' || !f.indexStatus).length;
@@ -486,11 +496,11 @@ export function MonitoredFoldersPanel({
                                         />
                                     )}
                                 </div>
-                                
+
                                 {hasFailedFiles && (
                                     <div className="mt-2 rounded bg-destructive/10 p-2 text-[10px] text-destructive">
                                         <p className="font-semibold">
-                                            {failedCount || (folder.failedFiles?.length ?? 0)} file(s) failed to index — expand "Show Files" to retry individual files
+                                            {failedCount || (folder.failedFiles?.length ?? 0)} file(s) failed to index — expand &quot;Show Files&quot; to retry individual files
                                         </p>
                                     </div>
                                 )}
@@ -523,16 +533,16 @@ export function MonitoredFoldersPanel({
                                             label={`Index All (${resolveMode(folder.id) === 'fast' ? 'Fast' : 'Deep'})`}
                                             options={[
                                                 { label: '✓ Index All (Fast)', value: 'fast' },
-                                                { label: 'Index All (Deep)', value: 'fine' }
+                                                { label: 'Index All (Deep)', value: 'deep' }
                                             ].map(opt => ({
                                                 ...opt,
-                                                label: opt.value === resolveMode(folder.id) 
+                                                label: opt.value === resolveMode(folder.id)
                                                     ? `✓ Index All (${opt.value === 'fast' ? 'Fast' : 'Deep'})`
                                                     : `Index All (${opt.value === 'fast' ? 'Fast' : 'Deep'})`
                                             }))}
-                                            onSelect={(value) => handleIndexAll(folder.id, value as 'fast' | 'fine')}
+                                            onSelect={(value) => handleIndexAll(folder.id, value as 'fast' | 'deep')}
                                         />
-                                        
+
                                         {/* Remove button with confirmation */}
                                         {confirming === folder.id ? (
                                             <div className="flex gap-2">
@@ -600,21 +610,21 @@ export function MonitoredFoldersPanel({
                                                         const fileFullPath = normalizePath(file.fullPath);
                                                         const filePath = normalizePath(file.path);
                                                         return (
-                                                            itemPath === fileFullPath || 
-                                                            itemPath === filePath || 
+                                                            itemPath === fileFullPath ||
+                                                            itemPath === filePath ||
                                                             itemPath.endsWith('/' + file.name)
                                                         );
                                                     });
                                                     const isProcessing = !!processingItem;
                                                     const processingProgress = processingItem?.progress ?? null;
-                                                    
+
                                                     const baseIndexMode = getFileIndexMode(file);
                                                     const indexMode: IndexMode = isProcessing ? 'processing' : baseIndexMode;
                                                     const isPending = indexMode === 'none';
                                                     const isError = indexMode === 'error';
                                                     const isFast = indexMode === 'fast';
                                                     const needsIndex = isPending || isError;
-                                                    
+
                                                     return (
                                                         <div
                                                             key={file.id}
@@ -650,13 +660,13 @@ export function MonitoredFoldersPanel({
                                                                 <span className="uppercase hidden sm:inline">{file.extension}</span>
                                                                 <span className="w-14 text-right hidden sm:inline">{formatBytes(file.size)}</span>
                                                                 <IndexModeTag mode={indexMode} errorReason={file.errorReason} progress={processingProgress} />
-                                                                
+
                                                                 {/* Quick upgrade button - only show for Fast indexed files */}
                                                                 {isFast && !isProcessing && (
                                                                     <button
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            handleFileIndex(file.fullPath, 'fine');
+                                                                            handleFileIndex(file.fullPath, 'deep');
                                                                         }}
                                                                         className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:hover:bg-violet-900/50 transition-colors"
                                                                         title="Upgrade to Deep index"
@@ -665,19 +675,19 @@ export function MonitoredFoldersPanel({
                                                                         Deep
                                                                     </button>
                                                                 )}
-                                                                
+
                                                                 {/* Dropdown menu for index/reindex options - hide when processing */}
                                                                 {!isProcessing && (
                                                                     <IndexDropdown
                                                                         label={needsIndex ? (isError ? 'Retry' : 'Index') : 'Reindex'}
                                                                         options={needsIndex ? [
                                                                             { label: 'Fast Index', value: 'fast' },
-                                                                            { label: 'Deep Index', value: 'fine' }
+                                                                            { label: 'Deep Index', value: 'deep' }
                                                                         ] : [
                                                                             { label: 'Fast Reindex', value: 'fast' },
-                                                                            { label: 'Deep Reindex', value: 'fine' }
+                                                                            { label: 'Deep Reindex', value: 'deep' }
                                                                         ]}
-                                                                        onSelect={(value) => handleFileIndex(file.fullPath, value as 'fast' | 'fine')}
+                                                                        onSelect={(value) => handleFileIndex(file.fullPath, value as 'fast' | 'deep')}
                                                                         variant="small"
                                                                     />
                                                                 )}
@@ -687,7 +697,7 @@ export function MonitoredFoldersPanel({
                                                 })
                                             ) : (
                                                 <div className="text-center py-4 text-sm text-muted-foreground border border-dashed rounded">
-                                                    No files found. Click "Index All" to scan and index this folder.
+                                                    No files found. Click &quot;Index All&quot; to scan and index this folder.
                                                 </div>
                                             )}
                                         </div>

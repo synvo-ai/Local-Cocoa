@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { X, FileText, ExternalLink, Activity, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
-import type { IndexedFile, SearchHit, IndexProgressUpdate, IndexingItem } from '../../types';
+import { X, FileText, ExternalLink, Activity, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Shield, ShieldOff } from 'lucide-react';
+import type { IndexedFile, SearchHit, IndexProgressUpdate, IndexingItem, PrivacyLevel } from '../../types';
+import type { StagedIndexProgress } from '../../../electron/backendClient';
 import { IndexProgressPanel } from '../IndexProgressPanel';
 
 interface RightPanelProps {
@@ -16,6 +17,7 @@ interface RightPanelProps {
     isIndexing?: boolean;
     indexProgress?: IndexProgressUpdate | null;
     indexingItems?: IndexingItem[];
+    stageProgress?: StagedIndexProgress | null;
     onCloseIndexing?: () => void;
     
     // Queue management
@@ -34,6 +36,7 @@ export function RightPanel({
     isIndexing = false,
     indexProgress = null,
     indexingItems = [],
+    stageProgress = null,
     onCloseIndexing,
     onRemoveFromQueue,
     onPauseIndexing,
@@ -114,6 +117,10 @@ export function RightPanel({
     const [fullContext, setFullContext] = useState<string | null>(null);
     const [fullContextError, setFullContextError] = useState<string | null>(null);
     const [showFullContext, setShowFullContext] = useState(false);
+    
+    // Privacy state
+    const [privacyLevel, setPrivacyLevel] = useState<PrivacyLevel>('normal');
+    const [isUpdatingPrivacy, setIsUpdatingPrivacy] = useState(false);
 
     interface FileChunkSnapshot {
         chunk_id: string;
@@ -426,6 +433,40 @@ export function RightPanel({
             setFullContextError(null);
         }
     }, [activeChunk]);
+    
+    // Load privacy level when file changes
+    useEffect(() => {
+        if (!fileId || !window.api?.getFilePrivacy) {
+            setPrivacyLevel('normal');
+            return;
+        }
+        
+        window.api.getFilePrivacy(fileId)
+            .then((result) => {
+                setPrivacyLevel(result.privacyLevel || 'normal');
+            })
+            .catch((err) => {
+                console.error('Failed to get file privacy:', err);
+                setPrivacyLevel('normal');
+            });
+    }, [fileId]);
+    
+    // Toggle privacy level
+    const handleTogglePrivacy = useCallback(async () => {
+        if (!fileId || !window.api?.setFilePrivacy || isUpdatingPrivacy) return;
+        
+        setIsUpdatingPrivacy(true);
+        const newLevel: PrivacyLevel = privacyLevel === 'normal' ? 'private' : 'normal';
+        
+        try {
+            const result = await window.api.setFilePrivacy(fileId, newLevel);
+            setPrivacyLevel(result.privacyLevel);
+        } catch (err) {
+            console.error('Failed to update privacy:', err);
+        } finally {
+            setIsUpdatingPrivacy(false);
+        }
+    }, [fileId, privacyLevel, isUpdatingPrivacy]);
 
     const handleClose = () => {
         if (activeTab === 'preview' && hasPreview) {
@@ -496,6 +537,7 @@ export function RightPanel({
                         isIndexing={isIndexing}
                         progress={indexProgress}
                         indexingItems={indexingItems}
+                        stageProgress={stageProgress}
                         onRemoveItem={onRemoveFromQueue}
                         onPauseIndexing={onPauseIndexing}
                         onResumeIndexing={onResumeIndexing}
@@ -522,6 +564,46 @@ export function RightPanel({
                                     <ExternalLink className="h-3.5 w-3.5" />
                                     Open in Default App
                                 </button>
+                            </div>
+                            
+                            {/* Privacy Toggle */}
+                            <div className="mt-4 pt-4 border-t">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        {privacyLevel === 'private' ? (
+                                            <Shield className="h-4 w-4 text-amber-500" />
+                                        ) : (
+                                            <ShieldOff className="h-4 w-4 text-muted-foreground" />
+                                        )}
+                                        <div>
+                                            <p className="text-xs font-medium">
+                                                {privacyLevel === 'private' ? 'Private' : 'Normal'}
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                {privacyLevel === 'private' 
+                                                    ? 'Hidden from external access'
+                                                    : 'Accessible by external agents'
+                                                }
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleTogglePrivacy}
+                                        disabled={isUpdatingPrivacy}
+                                        className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${
+                                            privacyLevel === 'private'
+                                                ? 'bg-amber-500'
+                                                : 'bg-muted'
+                                        } ${isUpdatingPrivacy ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        title={privacyLevel === 'private' ? 'Make Normal' : 'Make Private'}
+                                    >
+                                        <span
+                                            className={`absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                                                privacyLevel === 'private' ? 'translate-x-5' : 'translate-x-0'
+                                            }`}
+                                        />
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

@@ -94,63 +94,63 @@ interface OriginStats {
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const FILE_TYPE_CONFIG: Record<FileKind, { label: string; icon: typeof File; color: string; gradient: string }> = {
-    document: { 
-        label: 'Documents', 
-        icon: FileText, 
+    document: {
+        label: 'Documents',
+        icon: FileText,
         color: 'text-blue-400',
         gradient: 'from-blue-500 to-blue-600'
     },
-    image: { 
-        label: 'Images', 
-        icon: Image, 
+    image: {
+        label: 'Images',
+        icon: Image,
         color: 'text-pink-400',
         gradient: 'from-pink-500 to-rose-500'
     },
-    video: { 
-        label: 'Videos', 
-        icon: Video, 
+    video: {
+        label: 'Videos',
+        icon: Video,
         color: 'text-purple-400',
         gradient: 'from-purple-500 to-violet-600'
     },
-    audio: { 
-        label: 'Audio', 
-        icon: Music, 
+    audio: {
+        label: 'Audio',
+        icon: Music,
         color: 'text-green-400',
         gradient: 'from-green-500 to-emerald-500'
     },
-    archive: { 
-        label: 'Archives', 
-        icon: Archive, 
+    archive: {
+        label: 'Archives',
+        icon: Archive,
         color: 'text-amber-400',
         gradient: 'from-amber-500 to-orange-500'
     },
-    book: { 
-        label: 'Books', 
-        icon: BookOpen, 
+    book: {
+        label: 'Books',
+        icon: BookOpen,
         color: 'text-indigo-400',
         gradient: 'from-indigo-500 to-blue-600'
     },
-    code: { 
-        label: 'Code', 
-        icon: File, 
+    code: {
+        label: 'Code',
+        icon: File,
         color: 'text-cyan-400',
         gradient: 'from-cyan-500 to-teal-500'
     },
-    presentation: { 
-        label: 'Presentations', 
-        icon: FileText, 
+    presentation: {
+        label: 'Presentations',
+        icon: FileText,
         color: 'text-orange-400',
         gradient: 'from-orange-500 to-red-500'
     },
-    spreadsheet: { 
-        label: 'Spreadsheets', 
-        icon: FileText, 
+    spreadsheet: {
+        label: 'Spreadsheets',
+        icon: FileText,
         color: 'text-emerald-400',
         gradient: 'from-emerald-500 to-green-600'
     },
-    other: { 
-        label: 'Other', 
-        icon: File, 
+    other: {
+        label: 'Other',
+        icon: File,
         color: 'text-gray-400',
         gradient: 'from-gray-500 to-slate-600'
     },
@@ -174,23 +174,23 @@ interface ColorTheme {
     // Slide backgrounds
     slideGradient: string;
     slideGradientAlt: string;
-    
+
     // Primary accent color (for icons, highlights)
     primary: string;
     primaryLight: string;
     primaryDark: string;
-    
+
     // Secondary accent
     secondary: string;
     secondaryLight: string;
-    
+
     // Text gradient for titles
     titleGradient: string;
-    
+
     // Bar chart / progress colors
     barShades: string[];
     dotColors: string[];
-    
+
     // Activity grid colors (contribution graph)
     activityColors: {
         empty: string;
@@ -201,23 +201,23 @@ interface ColorTheme {
         level5: string;
         busiest: string;
     };
-    
+
     // Timeline colors
     timelineGradient: string;
     timelineDot: string;
     timelineDotBorder: string;
-    
+
     // Button gradient
     buttonGradient: string;
     buttonHoverGradient: string;
-    
+
     // Card backgrounds
     cardBg: string;
     cardBorder: string;
-    
+
     // Stat badge colors for top files
     badgeColors: string[];
-    
+
     // For generated image (inline styles use hex colors)
     hex: {
         primary: string;
@@ -435,21 +435,21 @@ function getMeaningfulFolderName(path: string): string {
     if (userMatch) {
         displayPath = userMatch[1];
     }
-    
+
     // Get the last meaningful folder name (not generic ones)
     const parts = displayPath.split('/').filter(Boolean);
-    
+
     // Find the most specific (deepest) folder name
     for (let i = parts.length - 1; i >= 0; i--) {
         if (!GENERIC_FOLDERS.has(parts[i])) {
             // Return this folder + parent context
-            if (i > 0 && GENERIC_FOLDERS.has(parts[i-1])) {
-                return `${parts[i-1]}/${parts[i]}`;
+            if (i > 0 && GENERIC_FOLDERS.has(parts[i - 1])) {
+                return `${parts[i - 1]}/${parts[i]}`;
             }
             return parts[i];
         }
     }
-    
+
     return parts[parts.length - 1] || displayPath;
 }
 
@@ -459,14 +459,14 @@ function getMeaningfulFolderName(path: string): string {
  */
 function extractProjectInsights(files: ScannedFile[]): string {
     if (files.length === 0) return 'No files.';
-    
+
     // Group by directory
     const dirGroups: Record<string, { count: number; size: number; types: Record<string, number> }> = {};
-    
+
     for (const file of files) {
         const lastSlash = file.path.lastIndexOf('/');
         const dirPath = lastSlash > 0 ? file.path.substring(0, lastSlash) : '/';
-        
+
         if (!dirGroups[dirPath]) {
             dirGroups[dirPath] = { count: 0, size: 0, types: {} };
         }
@@ -474,20 +474,20 @@ function extractProjectInsights(files: ScannedFile[]): string {
         dirGroups[dirPath].size += file.size;
         dirGroups[dirPath].types[file.kind] = (dirGroups[dirPath].types[file.kind] || 0) + 1;
     }
-    
+
     // Extract project-level paths (find the deepest meaningful folder)
     const projectStats: Record<string, { count: number; size: number; types: Record<string, number>; paths: string[] }> = {};
-    
+
     for (const [dirPath, stats] of Object.entries(dirGroups)) {
         // Find the project name from path
         const userMatch = dirPath.match(/^\/Users\/[^/]+\/(.+)$/);
         const relativePath = userMatch ? userMatch[1] : dirPath;
         const parts = relativePath.split('/').filter(Boolean);
-        
+
         // Find first non-generic folder as project identifier
         let projectName = '';
         let projectDepth = 0;
-        
+
         for (let i = 0; i < parts.length; i++) {
             if (!GENERIC_FOLDERS.has(parts[i])) {
                 // This is likely a project name
@@ -496,12 +496,12 @@ function extractProjectInsights(files: ScannedFile[]): string {
                 break;
             }
         }
-        
+
         // If no project found, use the path structure
         if (!projectName) {
             projectName = parts.length > 1 ? parts[1] : parts[0] || 'root';
         }
-        
+
         if (!projectStats[projectName]) {
             projectStats[projectName] = { count: 0, size: 0, types: {}, paths: [] };
         }
@@ -512,26 +512,26 @@ function extractProjectInsights(files: ScannedFile[]): string {
             projectStats[projectName].types[type] = (projectStats[projectName].types[type] || 0) + cnt;
         }
     }
-    
+
     // Sort by file count and take top projects
     const topProjects = Object.entries(projectStats)
         .sort((a, b) => b[1].count - a[1].count)
         .slice(0, 5);
-    
+
     // Build concise output
     const lines: string[] = [];
-    
+
     for (const [name, stats] of topProjects) {
         const pct = Math.round((stats.count / files.length) * 100);
         const dominantType = Object.entries(stats.types).sort((a, b) => b[1] - a[1])[0];
         const typeStr = dominantType ? ` (${dominantType[0]})` : '';
-        
+
         // Only include if it's meaningful (>5% of activity or >50 files)
         if (pct >= 5 || stats.count >= 50) {
             lines.push(`• "${name}": ${stats.count} files${typeStr}`);
         }
     }
-    
+
     if (lines.length === 0) {
         // Fallback: just describe the activity
         const totalTypes: Record<string, number> = {};
@@ -539,7 +539,7 @@ function extractProjectInsights(files: ScannedFile[]): string {
         const mainType = Object.entries(totalTypes).sort((a, b) => b[1] - a[1])[0];
         return `Scattered activity across ${Object.keys(dirGroups).length} folders, mostly ${mainType?.[0] || 'mixed'} files.`;
     }
-    
+
     return lines.join('\n');
 }
 
@@ -549,20 +549,20 @@ function extractProjectInsights(files: ScannedFile[]): string {
  */
 function buildFolderTreeForAnalysis(files: ScannedFile[]): string {
     if (files.length === 0) return 'No files found.';
-    
+
     // Group files by their FULL directory path
     const dirGroups: Record<string, ScannedFile[]> = {};
-    
+
     for (const file of files) {
         const lastSlash = file.path.lastIndexOf('/');
         const dirPath = lastSlash > 0 ? file.path.substring(0, lastSlash) : '/';
-        
+
         if (!dirGroups[dirPath]) {
             dirGroups[dirPath] = [];
         }
         dirGroups[dirPath].push(file);
     }
-    
+
     // Find "hotspot" directories - where most files are concentrated
     // Sort by file count to find the most active directories
     const sortedDirs = Object.entries(dirGroups)
@@ -573,30 +573,30 @@ function buildFolderTreeForAnalysis(files: ScannedFile[]): string {
             files: files.slice(0, 10), // Keep samples
         }))
         .sort((a, b) => b.count - a.count);
-    
+
     // Take top hotspot directories
     const hotspots = sortedDirs.slice(0, MAX_HOTSPOTS);
     const hotspotTotal = hotspots.reduce((sum, h) => sum + h.count, 0);
-    
+
     // Build output
     const lines: string[] = [];
     lines.push(`Activity concentrated in ${sortedDirs.length} folders:`);
     lines.push('');
-    
+
     for (const hotspot of hotspots) {
         const folderName = getMeaningfulFolderName(hotspot.path);
         const percentage = Math.round((hotspot.count / files.length) * 100);
-        
+
         // Get the short path for context
         let shortPath = hotspot.path;
         const userMatch = hotspot.path.match(/^\/Users\/[^/]+\/(.+)$/);
         if (userMatch) {
             shortPath = '~/' + userMatch[1];
         }
-        
+
         lines.push(`📂 "${folderName}" - ${hotspot.count.toLocaleString()} files (${percentage}%)`);
         lines.push(`   Path: ${shortPath}`);
-        
+
         // Analyze file types in this folder
         const typeCount: Record<string, number> = {};
         const extCount: Record<string, number> = {};
@@ -605,13 +605,13 @@ function buildFolderTreeForAnalysis(files: ScannedFile[]): string {
             const ext = file.extension.toLowerCase();
             if (ext) extCount[ext] = (extCount[ext] || 0) + 1;
         }
-        
+
         // Get dominant file type
         const dominantType = Object.entries(typeCount).sort((a, b) => b[1] - a[1])[0];
         if (dominantType) {
             lines.push(`   Type: mostly ${dominantType[0]} files`);
         }
-        
+
         // Sample file names (to understand the content)
         const samples = hotspot.files
             .slice(0, MAX_SAMPLE_FILES)
@@ -619,23 +619,23 @@ function buildFolderTreeForAnalysis(files: ScannedFile[]): string {
         if (samples.length > 0) {
             lines.push(`   Examples: ${samples.join(', ')}`);
         }
-        
+
         lines.push('');
     }
-    
+
     // Summary of coverage
     const coveragePercent = Math.round((hotspotTotal / files.length) * 100);
     if (coveragePercent < 100 && sortedDirs.length > MAX_HOTSPOTS) {
         const otherCount = files.length - hotspotTotal;
         lines.push(`+ ${otherCount.toLocaleString()} files scattered across ${sortedDirs.length - MAX_HOTSPOTS} other folders`);
     }
-    
+
     // Safety truncation
     let result = lines.join('\n');
     if (result.length > MAX_TREE_CHARS) {
         result = result.substring(0, MAX_TREE_CHARS) + '\n...(truncated)';
     }
-    
+
     return result;
 }
 
@@ -654,7 +654,7 @@ function generateBusiestDayPrompt(
         month: 'long',
         day: 'numeric'
     });
-    
+
     // Format type breakdown (top 5 types only)
     const typeBreakdown = Object.entries(byType)
         .filter(([_, data]) => data.count > 0)
@@ -662,7 +662,7 @@ function generateBusiestDayPrompt(
         .slice(0, 5)
         .map(([type, data]) => `- ${type}: ${data.count.toLocaleString()} files`)
         .join('\n');
-    
+
     const prompt = `Analyze this file activity and summarize what the user was doing.
 
 Date: ${dateStr}
@@ -684,7 +684,7 @@ Be specific and avoid generic statements like "organizing files".`;
         const truncatedTree = folderTree.substring(0, folderTree.length - (prompt.length - MAX_PROMPT_LENGTH) - 50);
         return prompt.replace(folderTree, truncatedTree + '\n...(more folders)');
     }
-    
+
     return prompt;
 }
 
@@ -722,7 +722,7 @@ function IntroSlide({ year, totalFiles, totalSize, theme }: { year: number; tota
                     {year}
                 </h1>
                 <p className="text-xl text-white/70 max-w-md">
-                    Let's take a look back at what you created, collected, and stored this year.
+                    Let&apos;s take a look back at what you created, collected, and stored this year.
                 </p>
                 <div className="relative mt-8">
                     <div className={cn("flex items-center justify-center gap-8 rounded-2xl px-8 py-6 border", theme.cardBg, theme.cardBorder)}>
@@ -737,9 +737,9 @@ function IntroSlide({ year, totalFiles, totalSize, theme }: { year: number; tota
                         </div>
                     </div>
                     {/* Cocoa mascot - bottom right of stats card */}
-                    <img 
-                        src={cocoaMascot} 
-                        alt="Local Cocoa" 
+                    <img
+                        src={cocoaMascot}
+                        alt="Local Cocoa"
                         className="absolute -bottom-4 -right-6 h-14 w-14 opacity-80 drop-shadow-lg"
                     />
                 </div>
@@ -753,8 +753,8 @@ function IntroSlide({ year, totalFiles, totalSize, theme }: { year: number; tota
 }
 
 // GitHub-style Contribution Graph Slide
-function ContributionGraphSlide({ 
-    dailyActivity, 
+function ContributionGraphSlide({
+    dailyActivity,
     year,
     busiestDay,
     totalFiles,
@@ -765,8 +765,8 @@ function ContributionGraphSlide({
     insightError,
     onGenerateInsight,
     theme
-}: { 
-    dailyActivity: DayActivity[]; 
+}: {
+    dailyActivity: DayActivity[];
     year: number;
     busiestDay: { date: string; count: number } | null;
     totalFiles: number;
@@ -782,66 +782,66 @@ function ContributionGraphSlide({
     // Build the contribution grid
     // GitHub shows Sun-Sat as rows (7 rows), weeks as columns (52-53 columns)
     const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    
+
     // Create a map for quick lookup
     const activityMap = useMemo(() => {
         const map = new Map<string, number>();
         dailyActivity.forEach(d => map.set(d.date, d.count));
         return map;
     }, [dailyActivity]);
-    
+
     // Get max count for color scaling
     const maxCount = useMemo(() => {
         return Math.max(...dailyActivity.map(d => d.count), 1);
     }, [dailyActivity]);
-    
+
     // Build the grid: 53 weeks x 7 days
     const grid = useMemo(() => {
         const weeks: Array<Array<{ date: string; count: number; isCurrentYear: boolean }>> = [];
-        
+
         // Start from the first day of the year
         const startDate = new Date(year, 0, 1);
         // Find the first Sunday on or before Jan 1
         const firstSunday = new Date(startDate);
         firstSunday.setDate(startDate.getDate() - startDate.getDay());
-        
+
         // End at Dec 31
         const endDate = new Date(year, 11, 31);
-        
-        let currentDate = new Date(firstSunday);
+
+        const currentDate = new Date(firstSunday);
         let currentWeek: Array<{ date: string; count: number; isCurrentYear: boolean }> = [];
-        
+
         while (currentDate <= endDate || currentWeek.length > 0) {
             const dateStr = currentDate.toISOString().split('T')[0];
             const isCurrentYear = currentDate.getFullYear() === year;
-            
+
             currentWeek.push({
                 date: dateStr,
                 count: isCurrentYear ? (activityMap.get(dateStr) || 0) : 0,
                 isCurrentYear
             });
-            
+
             if (currentWeek.length === 7) {
                 weeks.push(currentWeek);
                 currentWeek = [];
             }
-            
+
             currentDate.setDate(currentDate.getDate() + 1);
-            
+
             // Stop if we've passed end of year and completed the week
             if (currentDate > endDate && currentWeek.length === 0) {
                 break;
             }
         }
-        
+
         // Add any remaining days
         if (currentWeek.length > 0) {
             weeks.push(currentWeek);
         }
-        
+
         return weeks;
     }, [year, activityMap]);
-    
+
     // Get color based on activity level (fixed thresholds for better visibility)
     // Busiest day gets special gold color
     const getActivityColor = (count: number, isCurrentYear: boolean, isBusiestDay: boolean) => {
@@ -854,12 +854,12 @@ function ContributionGraphSlide({
         if (count <= 1000) return theme.activityColors.level4;
         return theme.activityColors.level5;
     };
-    
+
     // Month labels positioning - only show months from the current year (skip Dec from previous year)
     const monthPositions = useMemo(() => {
         const positions: Array<{ month: string; weekIndex: number }> = [];
         let lastMonth = -1;
-        
+
         grid.forEach((week, weekIndex) => {
             // Find a day in this week that belongs to the current year
             const dayInYear = week.find(d => {
@@ -867,7 +867,7 @@ function ContributionGraphSlide({
                 const date = new Date(d.date);
                 return date.getFullYear() === year;
             });
-            
+
             if (dayInYear) {
                 const date = new Date(dayInYear.date);
                 const month = date.getMonth();
@@ -884,10 +884,10 @@ function ContributionGraphSlide({
                 }
             }
         });
-        
+
         return positions;
     }, [grid, year]);
-    
+
     return (
         <Slide className={theme.slideGradient}>
             <div className="space-y-6 w-full max-w-3xl animate-fade-in">
@@ -898,13 +898,13 @@ function ContributionGraphSlide({
                         {totalFiles.toLocaleString()} files across {dailyActivity.filter(d => d.count > 0).length} active days
                     </p>
                 </div>
-                
+
                 {/* GitHub-style Contribution Graph */}
                 <div className={cn("backdrop-blur rounded-xl p-4 overflow-x-auto border", theme.cardBg, theme.cardBorder)}>
                     {/* Month labels */}
                     <div className="relative h-4 mb-1 ml-8">
                         {monthPositions.map((pos, idx) => (
-                            <span 
+                            <span
                                 key={idx}
                                 className="absolute text-[10px] text-white/50 font-medium whitespace-nowrap"
                                 style={{ left: `${pos.weekIndex * 12}px` }}
@@ -913,13 +913,13 @@ function ContributionGraphSlide({
                             </span>
                         ))}
                     </div>
-                    
+
                     {/* Grid with day labels */}
                     <div className="flex">
                         {/* Day labels column */}
                         <div className="flex flex-col justify-between mr-1 py-0.5">
                             {DAY_LABELS.map((day, idx) => (
-                                <div 
+                                <div
                                     key={day}
                                     className="text-[9px] text-white/40 h-[10px] leading-[10px]"
                                     style={{ visibility: idx % 2 === 1 ? 'visible' : 'hidden' }}
@@ -928,7 +928,7 @@ function ContributionGraphSlide({
                                 </div>
                             ))}
                         </div>
-                        
+
                         {/* Contribution grid */}
                         <div className="flex gap-[2px]">
                             {grid.map((week, weekIdx) => (
@@ -943,7 +943,7 @@ function ContributionGraphSlide({
                                                     getActivityColor(day.count, day.isCurrentYear, !!isBusiestDay),
                                                     isBusiestDay && "ring-2 ring-yellow-400 ring-offset-1 ring-offset-stone-900"
                                                 )}
-                                                title={day.isCurrentYear 
+                                                title={day.isCurrentYear
                                                     ? `${new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: ${day.count} files${isBusiestDay ? ' 🏆 Busiest day!' : ''}`
                                                     : ''
                                                 }
@@ -954,7 +954,7 @@ function ContributionGraphSlide({
                             ))}
                         </div>
                     </div>
-                    
+
                     {/* Legend */}
                     <div className="flex items-center justify-end gap-1 mt-3 text-[10px] text-white/50">
                         <span>Less</span>
@@ -967,7 +967,7 @@ function ContributionGraphSlide({
                         <span>More</span>
                     </div>
                 </div>
-                
+
                 {/* Busiest Day Highlight */}
                 {busiestDay && busiestDay.count > 0 && (
                     <div className="bg-yellow-600/10 backdrop-blur rounded-xl p-4 border border-yellow-600/20 space-y-3">
@@ -977,10 +977,10 @@ function ContributionGraphSlide({
                             </div>
                             <div className="text-left flex-1">
                                 <p className="text-white font-semibold">
-                                    {new Date(busiestDay.date).toLocaleDateString('en-US', { 
+                                    {new Date(busiestDay.date).toLocaleDateString('en-US', {
                                         weekday: 'long',
-                                        month: 'long', 
-                                        day: 'numeric' 
+                                        month: 'long',
+                                        day: 'numeric'
                                     })} was your busiest day
                                 </p>
                                 <p className="text-yellow-300/80 text-sm">
@@ -998,7 +998,7 @@ function ContributionGraphSlide({
                                 </button>
                             )}
                         </div>
-                        
+
                         {/* Loading state */}
                         {isLoadingInsight && (
                             <div className="flex items-center gap-3 text-yellow-300/70 text-sm border-t border-yellow-500/20 pt-3 mt-2">
@@ -1006,7 +1006,7 @@ function ContributionGraphSlide({
                                 <span className="text-left">Analyzing file activity...</span>
                             </div>
                         )}
-                        
+
                         {/* AI Insight display */}
                         {aiInsight && (
                             <div className="border-t border-yellow-500/20 pt-3 mt-2">
@@ -1018,7 +1018,7 @@ function ContributionGraphSlide({
                                 </div>
                             </div>
                         )}
-                        
+
                         {/* Error state */}
                         {insightError && (
                             <div className="text-red-400/80 text-sm text-left border-t border-yellow-500/20 pt-3 mt-2">
@@ -1036,7 +1036,7 @@ function ContributionGraphSlide({
 function FileTypesSlide({ typeStats, files, theme }: { typeStats: FileTypeStats[]; files: ScannedFile[]; theme: ColorTheme }) {
     const topTypes = typeStats.filter(t => t.count > 0).slice(0, 6);
     const topType = topTypes[0];
-    
+
     // Find representative files for each type
     // Use OLDEST file - gives a nostalgic "remember when" feeling for year review
     const representativeFiles = useMemo(() => {
@@ -1046,7 +1046,7 @@ function FileTypesSlide({ typeStats, files, theme }: { typeStats: FileTypeStats[
                 .filter(f => f.kind === type.kind)
                 // Sort by modification time (oldest first - for nostalgia)
                 .sort((a, b) => new Date(a.modifiedAt).getTime() - new Date(b.modifiedAt).getTime());
-            
+
             // Try to find a file with a meaningful name (not generic like IMG_001, DSC_0001, etc.)
             const meaningfulFile = filesOfType.find(f => {
                 const name = f.name.toLowerCase();
@@ -1056,16 +1056,16 @@ function FileTypesSlide({ typeStats, files, theme }: { typeStats: FileTypeStats[
                 if (/^\d+\.\w+$/.test(name)) return false;
                 return true;
             });
-            
+
             result[type.kind] = meaningfulFile || filesOfType[0] || null;
         }
         return result;
     }, [topTypes, files]);
-    
+
     const openFile = (path: string) => {
         window.api.openFile(path);
     };
-    
+
     return (
         <Slide className={theme.slideGradient}>
             <div className="space-y-6 w-full max-w-2xl animate-fade-in">
@@ -1074,7 +1074,7 @@ function FileTypesSlide({ typeStats, files, theme }: { typeStats: FileTypeStats[
                     <h2 className="text-3xl font-bold text-white">Your File Mix</h2>
                     <p className="text-white/60">What types of files you worked with most</p>
                 </div>
-                
+
                 {/* Top Type Hero */}
                 {topType && (
                     <div className={cn("backdrop-blur rounded-2xl p-5 border", theme.cardBg, theme.cardBorder)}>
@@ -1116,7 +1116,7 @@ function FileTypesSlide({ typeStats, files, theme }: { typeStats: FileTypeStats[
                         })()}
                     </div>
                 )}
-                
+
                 {/* Other Types Grid with representative files */}
                 <div className="grid grid-cols-3 gap-3">
                     {topTypes.slice(1, 7).map((type) => {
@@ -1164,7 +1164,7 @@ function StorageSlide({ typeStats, totalSize, theme }: { typeStats: FileTypeStat
         .filter(t => t.size > 0)
         .sort((a, b) => b.size - a.size)
         .slice(0, 5);
-    
+
     return (
         <Slide className={theme.slideGradient}>
             <div className="space-y-8 w-full max-w-2xl animate-fade-in">
@@ -1175,7 +1175,7 @@ function StorageSlide({ typeStats, totalSize, theme }: { typeStats: FileTypeStat
                         You stored <span className={cn("font-semibold", theme.primary)}>{formatSize(totalSize)}</span> of files
                     </p>
                 </div>
-                
+
                 {/* Stacked Bar */}
                 <div className="w-full h-8 rounded-full overflow-hidden flex bg-white/10">
                     {sortedBySize.map((type, idx) => {
@@ -1191,7 +1191,7 @@ function StorageSlide({ typeStats, totalSize, theme }: { typeStats: FileTypeStat
                         );
                     })}
                 </div>
-                
+
                 {/* Legend */}
                 <div className="space-y-2">
                     {sortedBySize.map((type, idx) => {
@@ -1224,14 +1224,14 @@ function TopFilesSlide({ topFiles, theme }: { topFiles: TopFile[]; theme: ColorT
                     <h2 className="text-3xl font-bold text-white">Your Largest Files</h2>
                     <p className="text-white/60">The biggest files taking up your storage</p>
                 </div>
-                
+
                 <div className="space-y-2">
                     {topFiles.slice(0, 5).map((file, idx) => {
                         const config = FILE_TYPE_CONFIG[file.kind];
                         const Icon = config.icon;
                         return (
-                            <div 
-                                key={file.path} 
+                            <div
+                                key={file.path}
                                 className="flex items-center gap-4 bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10"
                             >
                                 <div className={cn(
@@ -1262,13 +1262,13 @@ const MONTH_FULL_NAMES = [
 ];
 
 // Monthly Recap Slide - AI-powered month-by-month summary
-function MonthlyRecapSlide({ 
+function MonthlyRecapSlide({
     monthStats,
     monthlyFiles,
     year,
     isActive,
     theme
-}: { 
+}: {
     monthStats: MonthStats[];
     monthlyFiles: ScannedFile[][];
     year: number;
@@ -1276,32 +1276,32 @@ function MonthlyRecapSlide({
     theme: ColorTheme;
 }) {
     const storageKey = `year-review-monthly-${year}`;
-    
+
     // Calculate monthly highlights (top folder and file for each month)
     const monthlyHighlights = useMemo(() => {
         return monthlyFiles.map((files, month) => {
             if (files.length === 0) return null;
-            
+
             // Find top folder (excluding generic ones)
             const folderCounts: Record<string, { count: number; path: string }> = {};
             for (const file of files) {
                 const lastSlash = file.path.lastIndexOf('/');
                 const dirPath = lastSlash > 0 ? file.path.substring(0, lastSlash) : '/';
                 const folderName = getMeaningfulFolderName(dirPath);
-                
+
                 // Skip if the folder name is generic
                 if (GENERIC_FOLDERS.has(folderName)) continue;
-                
+
                 if (!folderCounts[folderName]) {
                     folderCounts[folderName] = { count: 0, path: dirPath };
                 }
                 folderCounts[folderName].count++;
             }
-            
+
             const topFolder = Object.entries(folderCounts)
                 .filter(([name]) => !GENERIC_FOLDERS.has(name))
                 .sort((a, b) => b[1].count - a[1].count)[0];
-            
+
             // Find largest/most notable file (skip tiny files and files in generic folders)
             const notableFile = files
                 .filter(f => {
@@ -1311,17 +1311,17 @@ function MonthlyRecapSlide({
                     const parentFolder = pathParts[pathParts.length - 2];
                     return !GENERIC_FOLDERS.has(parentFolder);
                 })
-                .sort((a, b) => b.size - a.size)[0] 
+                .sort((a, b) => b.size - a.size)[0]
                 // Fallback: if no file found outside generic folders, just get largest
                 || files.filter(f => f.size > 1024).sort((a, b) => b.size - a.size)[0];
-            
+
             return {
                 folder: topFolder ? { name: topFolder[0], path: topFolder[1].path, count: topFolder[1].count } : null,
                 file: notableFile ? { name: notableFile.name, path: notableFile.path, size: notableFile.size } : null,
             };
         });
     }, [monthlyFiles]);
-    
+
     // Initialize state from sessionStorage if available
     const [monthSummaries, setMonthSummaries] = useState<Record<number, string>>(() => {
         try {
@@ -1330,7 +1330,8 @@ function MonthlyRecapSlide({
                 const parsed = JSON.parse(saved);
                 return parsed.summaries || {};
             }
-        } catch {}
+            // eslint-disable-next-line no-empty
+        } catch { }
         return {};
     });
     const [loadingMonth, setLoadingMonth] = useState<number | null>(null);
@@ -1341,7 +1342,8 @@ function MonthlyRecapSlide({
                 const parsed = JSON.parse(saved);
                 return parsed.visible || [];
             }
-        } catch {}
+            // eslint-disable-next-line no-empty
+        } catch { }
         return [];
     });
     const [hasCompleted, setHasCompleted] = useState<boolean>(() => {
@@ -1351,15 +1353,16 @@ function MonthlyRecapSlide({
                 const parsed = JSON.parse(saved);
                 return parsed.completed || false;
             }
-        } catch {}
+            // eslint-disable-next-line no-empty
+        } catch { }
         return false;
     });
     const [hasStarted, setHasStarted] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
-    
+
     // Ref to prevent re-runs of progressive loading
     const hasGeneratedRef = useRef(false);
-    
+
     // Save to sessionStorage whenever summaries update
     useEffect(() => {
         if (Object.keys(monthSummaries).length > 0) {
@@ -1370,7 +1373,7 @@ function MonthlyRecapSlide({
             }));
         }
     }, [monthSummaries, visibleMonths, hasCompleted, storageKey]);
-    
+
     // Refresh/regenerate all summaries
     const handleRefresh = useCallback(() => {
         // Clear storage and state
@@ -1384,17 +1387,17 @@ function MonthlyRecapSlide({
         // Trigger restart
         setTimeout(() => setHasStarted(true), 300);
     }, [storageKey]);
-    
+
     // Open folder or file in Finder
     const openInFinder = useCallback((path: string) => {
         window.api.openFile(path);
     }, []);
-    
+
     // Generate prompt for a specific month
     const generateMonthPrompt = useCallback((month: number, files: ScannedFile[]): string => {
         const projectInsights = extractProjectInsights(files);
         const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-        
+
         // Get type breakdown
         const typeCount: Record<string, number> = {};
         files.forEach(f => {
@@ -1405,7 +1408,7 @@ function MonthlyRecapSlide({
             .slice(0, 3)
             .map(([type, count]) => `${count} ${type}`)
             .join(', ');
-        
+
         return `Write a personal recap for the user in ONE sentence (under 30 words).
 
 ${MONTH_FULL_NAMES[month]} ${year}: ${files.length.toLocaleString()} files, mainly ${mainTypes}
@@ -1416,7 +1419,7 @@ ${projectInsights}
 Use "You" (second person). Be warm and specific.
 Focus on project names from above. Skip generic folders like Downloads/Desktop.`;
     }, [year]);
-    
+
     // Generate summary for a single month
     const generateMonthlySummary = useCallback(async (month: number) => {
         const files = monthlyFiles[month];
@@ -1424,15 +1427,15 @@ Focus on project names from above. Skip generic folders like Downloads/Desktop.`
             setMonthSummaries(prev => ({ ...prev, [month]: 'No activity this month.' }));
             return;
         }
-        
+
         if (files.length < 10) {
-            setMonthSummaries(prev => ({ 
-                ...prev, 
-                [month]: `Light activity with ${files.length} files.` 
+            setMonthSummaries(prev => ({
+                ...prev,
+                [month]: `Light activity with ${files.length} files.`
             }));
             return;
         }
-        
+
         setLoadingMonth(month);
         try {
             const prompt = generateMonthPrompt(month, files);
@@ -1441,15 +1444,15 @@ Focus on project names from above. Skip generic folders like Downloads/Desktop.`
             setMonthSummaries(prev => ({ ...prev, [month]: summary }));
         } catch (error) {
             console.error(`Failed to generate summary for month ${month}:`, error);
-            setMonthSummaries(prev => ({ 
-                ...prev, 
-                [month]: `${files.length.toLocaleString()} files modified.` 
+            setMonthSummaries(prev => ({
+                ...prev,
+                [month]: `${files.length.toLocaleString()} files modified.`
             }));
         } finally {
             setLoadingMonth(null);
         }
     }, [monthlyFiles, generateMonthPrompt]);
-    
+
     // Progressive loading effect
     useEffect(() => {
         // Skip if already completed (restored from sessionStorage)
@@ -1457,40 +1460,40 @@ Focus on project names from above. Skip generic folders like Downloads/Desktop.`
             hasGeneratedRef.current = true;
             return;
         }
-        
+
         if (!hasStarted || isGenerating || hasGeneratedRef.current) return;
-        
+
         hasGeneratedRef.current = true;
         setIsGenerating(true);
-        
+
         const loadMonths = async () => {
             for (let month = 0; month < 12; month++) {
                 // First show the month (animate in)
                 setVisibleMonths(prev => [...prev, month]);
-                
+
                 // Wait for animation to complete before starting AI
                 await new Promise(resolve => setTimeout(resolve, 400));
-                
+
                 // Generate summary (this already takes time due to API call)
                 await generateMonthlySummary(month);
-                
+
                 // Pause before showing next month
                 await new Promise(resolve => setTimeout(resolve, 300));
             }
             setIsGenerating(false);
             setHasCompleted(true);
         };
-        
+
         loadMonths();
     }, [hasStarted, isGenerating, hasCompleted, generateMonthlySummary]);
-    
+
     // Start loading when slide becomes active (only if not already completed)
     useEffect(() => {
         if (hasCompleted || !isActive || hasStarted) return;
         const timer = setTimeout(() => setHasStarted(true), 500);
         return () => clearTimeout(timer);
     }, [isActive, hasStarted, hasCompleted]);
-    
+
     return (
         <Slide className={cn(theme.slideGradient, "!text-left")}>
             <div className="space-y-4 w-full max-w-2xl animate-fade-in">
@@ -1503,8 +1506,8 @@ Focus on project names from above. Skip generic folders like Downloads/Desktop.`
                             disabled={isGenerating}
                             className={cn(
                                 "p-1.5 rounded-full transition-all",
-                                isGenerating 
-                                    ? "opacity-30 cursor-not-allowed" 
+                                isGenerating
+                                    ? "opacity-30 cursor-not-allowed"
                                     : "hover:bg-white/10 text-white/40 hover:text-white/80"
                             )}
                             title="Regenerate summaries"
@@ -1514,13 +1517,13 @@ Focus on project names from above. Skip generic folders like Downloads/Desktop.`
                     </div>
                     <p className="text-white/60">Month by month breakdown</p>
                 </div>
-                
+
                 {/* Timeline container with scroll */}
                 <div className="max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                     <div className="relative pl-8">
                         {/* Timeline line - positioned to align with dot centers */}
                         <div className={cn("absolute left-[17px] top-0 bottom-0 w-0.5", theme.timelineGradient)} />
-                        
+
                         {/* Months */}
                         <div className="space-y-3">
                             {MONTH_FULL_NAMES.map((monthName, month) => {
@@ -1530,9 +1533,9 @@ Focus on project names from above. Skip generic folders like Downloads/Desktop.`
                                 const stats = monthStats[month];
                                 const hasActivity = stats.count > 0;
                                 const highlights = monthlyHighlights[month];
-                                
+
                                 return (
-                                    <div 
+                                    <div
                                         key={month}
                                         className={cn(
                                             "relative transition-all duration-700 ease-out",
@@ -1542,16 +1545,16 @@ Focus on project names from above. Skip generic folders like Downloads/Desktop.`
                                         {/* Timeline dot */}
                                         <div className={cn(
                                             "absolute -left-5 top-2 w-3 h-3 rounded-full border-2 transition-colors",
-                                            hasActivity 
+                                            hasActivity
                                                 ? cn(theme.timelineDot, theme.timelineDotBorder)
                                                 : "bg-slate-700 border-slate-600"
                                         )} />
-                                        
+
                                         {/* Month content */}
                                         <div className={cn(
                                             "bg-white/5 rounded-lg p-3 border transition-all",
-                                            hasActivity 
-                                                ? "border-white/10" 
+                                            hasActivity
+                                                ? "border-white/10"
                                                 : "border-white/5 opacity-50"
                                         )}>
                                             <div className="flex items-center justify-between mb-1">
@@ -1559,13 +1562,13 @@ Focus on project names from above. Skip generic folders like Downloads/Desktop.`
                                                     {monthName}
                                                 </span>
                                                 <span className="text-xs text-white/40">
-                                                    {stats.count > 0 
+                                                    {stats.count > 0
                                                         ? `${stats.count.toLocaleString()} files · ${formatSize(stats.size)}`
                                                         : 'No activity'
                                                     }
                                                 </span>
                                             </div>
-                                            
+
                                             {/* AI Summary */}
                                             <div className="text-sm text-white/70 mb-2">
                                                 {isLoading ? (
@@ -1581,7 +1584,7 @@ Focus on project names from above. Skip generic folders like Downloads/Desktop.`
                                                     <span className="text-white/30">Waiting...</span>
                                                 )}
                                             </div>
-                                            
+
                                             {/* Monthly Highlights */}
                                             {hasActivity && highlights && summary && !isLoading && (
                                                 <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-white/5">
@@ -1622,14 +1625,14 @@ Focus on project names from above. Skip generic folders like Downloads/Desktop.`
 }
 
 // Fun Facts Slide
-function FunFactsSlide({ 
-    totalFiles, 
-    totalSize, 
+function FunFactsSlide({
+    totalFiles,
+    totalSize,
     avgFilesPerDay,
     year,
     files,
     theme
-}: { 
+}: {
     totalFiles: number;
     totalSize: number;
     avgFilesPerDay: number;
@@ -1642,12 +1645,12 @@ function FunFactsSlide({
     const nightOwlFile = useMemo(() => {
         let closestTo5am: ScannedFile | null = null;
         let closestMinutes = Infinity; // minutes away from 5:00 AM
-        
+
         for (const file of files) {
             const date = new Date(file.modifiedAt);
             const hour = date.getHours();
             const minutes = date.getMinutes();
-            
+
             // Only consider files between 10pm (22:00) and 5am (05:00)
             if (hour >= 22 || hour < 5) {
                 // Calculate minutes until 5am
@@ -1660,14 +1663,14 @@ function FunFactsSlide({
                 } else {
                     minutesTo5am = (5 - hour) * 60 - minutes;
                 }
-                
+
                 if (minutesTo5am < closestMinutes) {
                     closestMinutes = minutesTo5am;
                     closestTo5am = file;
                 }
             }
         }
-        
+
         if (closestTo5am) {
             const date = new Date(closestTo5am.modifiedAt);
             const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
@@ -1675,26 +1678,26 @@ function FunFactsSlide({
         }
         return null;
     }, [files]);
-    
+
     // Find favorite and laziest day of week (using averages)
     const dayOfWeekStats = useMemo(() => {
         const dayCounts = [0, 0, 0, 0, 0, 0, 0]; // Sun-Sat
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const FILE_CAP_PER_DAY = 500; // Cap to prevent single outlier day from skewing
-        
+
         // Group by actual date first, then apply cap
         const dateGroups: Record<string, number> = {};
         for (const file of files) {
             const dateKey = file.modifiedAt.split('T')[0];
             dateGroups[dateKey] = (dateGroups[dateKey] || 0) + 1;
         }
-        
+
         // Sum files by day of week with cap
         for (const [dateKey, count] of Object.entries(dateGroups)) {
             const day = new Date(dateKey).getDay();
             dayCounts[day] += Math.min(count, FILE_CAP_PER_DAY);
         }
-        
+
         // Find max and min
         let maxDay = 0, minDay = 0;
         let maxCount = 0, minCount = Infinity;
@@ -1702,14 +1705,14 @@ function FunFactsSlide({
             if (count > maxCount) { maxCount = count; maxDay = day; }
             if (count < minCount && count > 0) { minCount = count; minDay = day; }
         });
-        
+
         // Calculate percentages
         const totalFiles = dayCounts.reduce((a, b) => a + b, 0);
         const busyPercentage = totalFiles > 0 ? Math.round((maxCount / totalFiles) * 100) : 0;
         const lazyPercentage = totalFiles > 0 ? Math.round((minCount / totalFiles) * 100) : 0;
-        
-        return { 
-            busyDay: dayNames[maxDay], 
+
+        return {
+            busyDay: dayNames[maxDay],
             busyCount: maxCount,
             busyPercentage,
             lazyDay: dayNames[minDay],
@@ -1717,12 +1720,12 @@ function FunFactsSlide({
             lazyPercentage
         };
     }, [files]);
-    
+
     // Find most active hour of day (using total counts with cap)
     const mostActiveHour = useMemo(() => {
         const hourCounts = Array(24).fill(0);
         const FILE_CAP_PER_HOUR_PER_DAY = 200; // Cap to prevent single outlier day from skewing
-        
+
         // Group by date+hour first, then apply cap
         const dateHourGroups: Record<string, number> = {};
         for (const file of files) {
@@ -1732,13 +1735,13 @@ function FunFactsSlide({
             const key = `${dateKey}_${hour}`; // Use underscore to avoid confusion with date dashes
             dateHourGroups[key] = (dateHourGroups[key] || 0) + 1;
         }
-        
+
         // Apply cap and sum by hour
         for (const [key, count] of Object.entries(dateHourGroups)) {
             const hour = parseInt(key.split('_')[1]);
             hourCounts[hour] += Math.min(count, FILE_CAP_PER_HOUR_PER_DAY);
         }
-        
+
         // Find max
         let maxHour = 0;
         let maxCount = 0;
@@ -1748,7 +1751,7 @@ function FunFactsSlide({
                 maxHour = hour;
             }
         });
-        
+
         // Format hour range nicely (e.g., "2-3 PM")
         const formatHour = (h: number) => {
             if (h === 0) return '12 AM';
@@ -1757,28 +1760,28 @@ function FunFactsSlide({
             return `${h - 12} PM`;
         };
         const hourStr = `${formatHour(maxHour)}-${formatHour((maxHour + 1) % 24)}`;
-        
+
         // Calculate percentage of total
         const totalFiles = hourCounts.reduce((a, b) => a + b, 0);
         const percentage = totalFiles > 0 ? Math.round((maxCount / totalFiles) * 100) : 0;
-        
+
         return { hour: hourStr, count: maxCount, percentage };
     }, [files]);
-    
+
     // Calculate average files per month
     const avgFilesPerMonth = useMemo(() => {
         return Math.round(files.length / 12);
     }, [files]);
-    
+
     const openFile = (path: string) => {
         window.api.openFile(path);
     };
-    
+
     // Format night owl date
-    const nightOwlDate = nightOwlFile 
+    const nightOwlDate = nightOwlFile
         ? new Date(nightOwlFile.file.modifiedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         : '';
-    
+
     const funFacts = [
         {
             icon: Calendar,
@@ -1798,8 +1801,8 @@ function FunFactsSlide({
             icon: Zap,
             label: "🦉 Night Owl Moment",
             value: `${nightOwlFile.time} · ${nightOwlDate}`,
-            subtitle: nightOwlFile.file.name.length > 25 
-                ? nightOwlFile.file.name.substring(0, 25) + '...' 
+            subtitle: nightOwlFile.file.name.length > 25
+                ? nightOwlFile.file.name.substring(0, 25) + '...'
                 : nightOwlFile.file.name,
             color: theme.primary,
             onClick: () => openFile(nightOwlFile.file.path)
@@ -1812,7 +1815,7 @@ function FunFactsSlide({
             color: theme.primary
         }
     ].filter(Boolean);
-    
+
     return (
         <Slide className={theme.slideGradient}>
             <div className="space-y-8 w-full max-w-2xl animate-fade-in">
@@ -1821,7 +1824,7 @@ function FunFactsSlide({
                     <h2 className="text-3xl font-bold text-white">Fun Facts</h2>
                     <p className="text-white/60">Interesting insights from your {year}</p>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                     {funFacts.map((fact, idx) => {
                         if (!fact) return null;
@@ -1829,7 +1832,7 @@ function FunFactsSlide({
                         const isClickable = 'onClick' in fact && fact.onClick;
                         const Wrapper = isClickable ? 'button' : 'div';
                         return (
-                            <Wrapper 
+                            <Wrapper
                                 key={idx}
                                 className={cn(
                                     "bg-white/5 backdrop-blur rounded-2xl p-6 text-left border border-white/10",
@@ -1856,14 +1859,14 @@ function FunFactsSlide({
 }
 
 // Outro Slide
-function OutroSlide({ 
-    year, 
-    totalFiles, 
+function OutroSlide({
+    year,
+    totalFiles,
     onSaveReport,
     isSaving,
     theme
-}: { 
-    year: number; 
+}: {
+    year: number;
     totalFiles: number;
     onSaveReport: () => void;
     isSaving: boolean;
@@ -1874,13 +1877,13 @@ function OutroSlide({
             <div className="space-y-6 animate-fade-in">
                 <Sparkles className={cn("h-12 w-12 mx-auto animate-pulse", theme.primary)} />
                 <h2 className={cn("text-4xl font-bold text-transparent bg-clip-text", theme.titleGradient)}>
-                    That's a wrap on {year}!
+                    That&apos;s a wrap on {year}!
                 </h2>
                 <p className="text-xl text-white/70 max-w-md">
-                    You managed <span className={cn("font-bold", theme.primary)}>{totalFiles.toLocaleString()}</span> files this year. 
-                    Here's to an even more productive {year + 1}!
+                    You managed <span className={cn("font-bold", theme.primary)}>{totalFiles.toLocaleString()}</span> files this year.
+                    Here&apos;s to an even more productive {year + 1}!
                 </p>
-                
+
                 {/* Save Report Button */}
                 <button
                     onClick={onSaveReport}
@@ -1899,23 +1902,23 @@ function OutroSlide({
                         </>
                     )}
                 </button>
-                
+
                 <div className="mt-8 space-y-2">
                     <div className="text-white/30 text-sm flex items-center justify-center gap-2">
                         <span>Generated by</span>
                         <span className={cn("font-semibold", theme.primary)}>Local Cocoa</span>
-                        <img 
-                            src={cocoaMascot} 
-                            alt="Local Cocoa" 
+                        <img
+                            src={cocoaMascot}
+                            alt="Local Cocoa"
                             className="h-5 w-5 inline-block"
                         />
                     </div>
                     <div className="text-white/20 text-xs flex items-center justify-center gap-2">
                         <span>Powered by</span>
                         <span className="font-medium text-white/40">Synvo AI</span>
-                        <img 
-                            src={synvoAiLogo} 
-                            alt="Synvo AI" 
+                        <img
+                            src={synvoAiLogo}
+                            alt="Synvo AI"
                             className="h-4 w-4 inline-block"
                         />
                     </div>
@@ -1931,48 +1934,48 @@ function OutroSlide({
 
 export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReviewModalProps) {
     const [currentSlide, setCurrentSlide] = useState(0);
-    
+
     // Get current skin and corresponding color theme
     const { skin } = useSkin();
     const theme = COLOR_THEMES[skin];
-    
+
     // AI Insight state (lifted here to persist across slide changes)
     const [aiInsight, setAiInsight] = useState<string | null>(null);
     const [isLoadingInsight, setIsLoadingInsight] = useState(false);
     const [insightError, setInsightError] = useState<string | null>(null);
-    
+
     // Save report state
     const [isSaving, setIsSaving] = useState(false);
-    
+
     // Calculate all stats
     const stats = useMemo(() => {
         if (files.length === 0) return null;
-        
+
         // Total stats
         const totalFiles = files.length;
         const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-        
+
         // Monthly stats and files grouping
         const monthStats: MonthStats[] = Array.from({ length: 12 }, (_, i) => ({
             month: i,
             count: 0,
             size: 0,
         }));
-        
+
         const monthlyFiles: ScannedFile[][] = Array.from({ length: 12 }, () => []);
         const dailyCounts: Record<string, number> = {};
-        
+
         files.forEach(file => {
             const date = new Date(file.modifiedAt);
             const month = date.getMonth();
             monthStats[month].count++;
             monthStats[month].size += file.size;
             monthlyFiles[month].push(file);
-            
+
             const dayKey = date.toISOString().split('T')[0];
             dailyCounts[dayKey] = (dailyCounts[dayKey] || 0) + 1;
         });
-        
+
         // Busiest day
         const busiestDay = Object.entries(dailyCounts).reduce<{ date: string; count: number } | null>(
             (max, [date, count]) => {
@@ -1983,7 +1986,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             },
             null
         );
-        
+
         // Daily activity for contribution graph
         const dailyActivity: DayActivity[] = Object.entries(dailyCounts).map(([date, count]) => {
             const d = new Date(date);
@@ -1994,7 +1997,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 weekIndex: Math.floor((d.getTime() - new Date(year, 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000))
             };
         });
-        
+
         // File type stats
         const typeMap: Record<FileKind, { count: number; size: number }> = {} as any;
         files.forEach(file => {
@@ -2004,7 +2007,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             typeMap[file.kind].count++;
             typeMap[file.kind].size += file.size;
         });
-        
+
         const typeStats: FileTypeStats[] = Object.entries(typeMap)
             .map(([kind, data]) => ({
                 kind: kind as FileKind,
@@ -2013,14 +2016,14 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 percentage: (data.count / totalFiles) * 100,
             }))
             .sort((a, b) => b.count - a.count);
-        
+
         // Origin stats
         const originMap: Record<FileOrigin, number> = {} as any;
         files.forEach(file => {
             const origin = file.origin || 'unknown';
             originMap[origin] = (originMap[origin] || 0) + 1;
         });
-        
+
         const originStats: OriginStats[] = Object.entries(originMap)
             .map(([origin, count]) => ({
                 origin: origin as FileOrigin,
@@ -2028,7 +2031,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 percentage: (count / totalFiles) * 100,
             }))
             .sort((a, b) => b.count - a.count);
-        
+
         // Top files by size
         const topFiles: TopFile[] = [...files]
             .sort((a, b) => b.size - a.size)
@@ -2040,20 +2043,20 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 kind: f.kind,
                 modifiedAt: f.modifiedAt,
             }));
-        
+
         // Unique extensions
         const extensions = new Set(files.map(f => f.extension.toLowerCase()));
-        
+
         // Average files per day (rough estimate based on days in year)
         const daysInYear = Object.keys(dailyCounts).length || 1;
         const avgFilesPerDay = totalFiles / daysInYear;
-        
+
         // Busiest day files and type stats for AI analysis
         const busiestDayDate = busiestDay?.date || '';
-        const busiestDayFiles: ScannedFile[] = busiestDayDate 
+        const busiestDayFiles: ScannedFile[] = busiestDayDate
             ? files.filter(f => f.modifiedAt.startsWith(busiestDayDate))
             : [];
-        
+
         const busiestDayTypeStats: Record<string, { count: number; size: number }> = {};
         for (const file of busiestDayFiles) {
             const kind = file.kind;
@@ -2063,7 +2066,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             busiestDayTypeStats[kind].count++;
             busiestDayTypeStats[kind].size += file.size;
         }
-        
+
         return {
             totalFiles,
             totalSize,
@@ -2080,14 +2083,14 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             uniqueExtensions: extensions.size,
         };
     }, [files, year]);
-    
+
     // Generate AI insight callback
     const generateInsight = useCallback(async () => {
         if (!stats?.busiestDay || stats.busiestDayFiles.length === 0) return;
-        
+
         setIsLoadingInsight(true);
         setInsightError(null);
-        
+
         try {
             const folderTree = buildFolderTreeForAnalysis(stats.busiestDayFiles);
             const totalSize = stats.busiestDayFiles.reduce((sum, f) => sum + f.size, 0);
@@ -2099,7 +2102,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 folderTree,
                 stats.busiestDayTypeStats
             );
-            
+
             const response = await window.api.ask(prompt, 1, 'chat');
             setAiInsight(response.answer?.trim() || 'Unable to generate insight.');
         } catch (error) {
@@ -2109,13 +2112,13 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             setIsLoadingInsight(false);
         }
     }, [stats]);
-    
+
     // Handle save report as image - renders ALL slides as one long image
     const handleSaveReport = useCallback(async () => {
         if (isSaving || !stats) return;
-        
+
         setIsSaving(true);
-        
+
         try {
             // Get monthly summaries from sessionStorage
             const storageKey = `year-review-monthly-${year}`;
@@ -2127,7 +2130,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                     monthlySummaries = parsed.summaries || {};
                 }
             } catch (e) { /* ignore */ }
-            
+
             // Prepare file types data (typeStats is already FileTypeStats[])
             const fileTypes = stats.typeStats.slice(0, 6).map(t => ({
                 label: FILE_TYPE_CONFIG[t.kind]?.label || t.kind,
@@ -2135,7 +2138,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 size: t.size,
                 percentage: Math.round(t.percentage)
             }));
-            
+
             const storageTypes = [...stats.typeStats]
                 .sort((a, b) => b.size - a.size)
                 .slice(0, 5)
@@ -2150,18 +2153,18 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             stats.dailyActivity.forEach(d => {
                 dateCountMap[d.date] = d.count;
             });
-            
+
             // Build a 53x7 grid (53 weeks, 7 days)
             // Week 0 starts at the first Sunday on or before Jan 1
             const jan1 = new Date(year, 0, 1);
             const jan1Day = jan1.getDay(); // 0=Sun, 1=Mon, etc
-            
+
             // Calculate the Sunday that starts week 0
             const firstSunday = new Date(jan1);
             firstSunday.setDate(1 - jan1Day);
-            
+
             const gridData: { week: number; day: number; count: number; date: string; inYear: boolean }[] = [];
-            
+
             for (let week = 0; week < 53; week++) {
                 for (let day = 0; day < 7; day++) {
                     const cellDate = new Date(firstSunday);
@@ -2184,21 +2187,21 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             const hourCounts = Array(24).fill(0);
             const FILE_CAP_PER_DAY = 500;
             const FILE_CAP_PER_HOUR = 200;
-            
+
             // Group files by date for day-of-week stats
             const dateGroups: Record<string, number> = {};
             const dateHourGroups: Record<string, number> = {};
             let nightOwlCandidate: { file: ScannedFile; minutesTo5am: number } | null = null;
-            
+
             for (const file of files) {
                 const dateKey = file.modifiedAt.split('T')[0];
                 dateGroups[dateKey] = (dateGroups[dateKey] || 0) + 1;
-                
+
                 const date = new Date(file.modifiedAt);
                 const hour = date.getHours();
                 const hourKey = `${dateKey}_${hour}`;
                 dateHourGroups[hourKey] = (dateHourGroups[hourKey] || 0) + 1;
-                
+
                 // Check for night owl (10pm-5am, closest to 5am)
                 if (hour >= 22 || hour < 5) {
                     const minutes = date.getMinutes();
@@ -2213,26 +2216,26 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                     }
                 }
             }
-            
+
             // Day of week stats with cap
             for (const [dateKey, count] of Object.entries(dateGroups)) {
                 const day = new Date(dateKey).getDay();
                 dayCounts[day] += Math.min(count, FILE_CAP_PER_DAY);
             }
-            
+
             // Hour stats with cap
             for (const [key, count] of Object.entries(dateHourGroups)) {
                 const hour = parseInt(key.split('_')[1]);
                 hourCounts[hour] += Math.min(count, FILE_CAP_PER_HOUR);
             }
-            
+
             // Find busiest day
             let maxDayIdx = 0, maxDayCount = 0;
             dayCounts.forEach((count, idx) => {
                 if (count > maxDayCount) { maxDayCount = count; maxDayIdx = idx; }
             });
             const totalDayFiles = dayCounts.reduce((a, b) => a + b, 0);
-            
+
             // Find peak hour
             let maxHourIdx = 0, maxHourCount = 0;
             hourCounts.forEach((count, idx) => {
@@ -2245,7 +2248,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 if (h === 12) return '12 PM';
                 return `${h - 12} PM`;
             };
-            
+
             const funFactsData = {
                 busyDay: dayNames[maxDayIdx],
                 busyCount: maxDayCount,
@@ -2255,8 +2258,8 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 peakPercentage: totalHourFiles > 0 ? Math.round((maxHourCount / totalHourFiles) * 100) : 0,
                 nightOwl: nightOwlCandidate ? {
                     time: new Date(nightOwlCandidate.file.modifiedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
-                    fileName: nightOwlCandidate.file.name.length > 30 
-                        ? nightOwlCandidate.file.name.substring(0, 27) + '...' 
+                    fileName: nightOwlCandidate.file.name.length > 30
+                        ? nightOwlCandidate.file.name.substring(0, 27) + '...'
                         : nightOwlCandidate.file.name
                 } : null
             };
@@ -2267,9 +2270,9 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             tempContainer.style.left = '-9999px';
             tempContainer.style.top = '0';
             document.body.appendChild(tempContainer);
-            
+
             const W = 600;
-            
+
             // Helper for contribution colors - use theme hex colors
             const getColor = (count: number, isBusiest: boolean) => {
                 if (isBusiest) return theme.hex.busiest;
@@ -2306,7 +2309,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 const monthData = stats.monthStats[m];
                 const summary = monthlySummaries[m];
                 if (monthData.count === 0) continue;
-                
+
                 monthlyHTML += `
                 <div style="display:flex; gap:16px; margin-bottom:16px;">
                     <div style="width:50px; text-align:right;">
@@ -2439,14 +2442,14 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
     </div>
     <table style="width:100%; border-collapse:separate; border-spacing:0 6px;">
         ${stats.topFiles.slice(0, 5).map((file, idx) => {
-            // Truncate filename to fit - max 35 chars
-            let displayName = file.name;
-            if (displayName.length > 35) {
-                const ext = displayName.lastIndexOf('.') > 0 ? displayName.slice(displayName.lastIndexOf('.')) : '';
-                const base = displayName.slice(0, displayName.lastIndexOf('.') > 0 ? displayName.lastIndexOf('.') : displayName.length);
-                displayName = base.slice(0, 30 - ext.length) + '...' + ext;
-            }
-            return `
+                // Truncate filename to fit - max 35 chars
+                let displayName = file.name;
+                if (displayName.length > 35) {
+                    const ext = displayName.lastIndexOf('.') > 0 ? displayName.slice(displayName.lastIndexOf('.')) : '';
+                    const base = displayName.slice(0, displayName.lastIndexOf('.') > 0 ? displayName.lastIndexOf('.') : displayName.length);
+                    displayName = base.slice(0, 30 - ext.length) + '...' + ext;
+                }
+                return `
         <tr>
             <td style="background:${theme.hex.cardBg}; border-radius:8px 0 0 8px; padding:12px; width:36px; text-align:center; vertical-align:middle;">
                 <div style="width:24px; height:24px; border-radius:5px; background:${theme.hex.primaryDark}; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; font-size:12px; color:white;">${idx + 1}</div>
@@ -2458,7 +2461,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 <div style="font-size:13px; color:${theme.hex.primary}; font-weight:500;">${formatSize(file.size)}</div>
             </td>
         </tr>`;
-        }).join('')}
+            }).join('')}
     </table>
 </div>
 
@@ -2516,20 +2519,20 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
 </div>
 
 </div>`;
-            
+
             // Wait for DOM to render
             await new Promise(resolve => setTimeout(resolve, 300));
-            
+
             // Capture using html2canvas
             const canvas = await html2canvas(tempContainer.firstElementChild as HTMLElement, {
                 backgroundColor: theme.hex.background,
                 scale: 2,
                 logging: false,
             });
-            
+
             // Cleanup
             document.body.removeChild(tempContainer);
-            
+
             // Convert and save
             const dataUrl = canvas.toDataURL('image/png');
             const result = await window.api.saveImage({
@@ -2537,7 +2540,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 defaultName: `Year-In-Review-${year}.png`,
                 title: 'Save Year In Review Report'
             });
-            
+
             if (result.saved) {
                 console.log('Report saved to:', result.path);
             }
@@ -2547,7 +2550,7 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             setIsSaving(false);
         }
     }, [year, isSaving, stats, aiInsight, theme, files]);
-    
+
     // Reset AI insight when modal closes
     useEffect(() => {
         if (!isOpen) {
@@ -2555,17 +2558,17 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             setInsightError(null);
         }
     }, [isOpen]);
-    
+
     // Slides array
     const slides = useMemo(() => {
         if (!stats) return [];
-        
+
         return [
             <IntroSlide key="intro" year={year} totalFiles={stats.totalFiles} totalSize={stats.totalSize} theme={theme} />,
-            <ContributionGraphSlide 
-                key="contribution" 
-                dailyActivity={stats.dailyActivity} 
-                year={year} 
+            <ContributionGraphSlide
+                key="contribution"
+                dailyActivity={stats.dailyActivity}
+                year={year}
                 busiestDay={stats.busiestDay}
                 totalFiles={stats.totalFiles}
                 busiestDayFiles={stats.busiestDayFiles}
@@ -2587,8 +2590,8 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             <FileTypesSlide key="types" typeStats={stats.typeStats} files={files} theme={theme} />,
             <StorageSlide key="storage" typeStats={stats.typeStats} totalSize={stats.totalSize} theme={theme} />,
             <TopFilesSlide key="top" topFiles={stats.topFiles} theme={theme} />,
-            <FunFactsSlide 
-                key="facts" 
+            <FunFactsSlide
+                key="facts"
                 totalFiles={stats.totalFiles}
                 totalSize={stats.totalSize}
                 avgFilesPerDay={stats.avgFilesPerDay}
@@ -2599,11 +2602,11 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             <OutroSlide key="outro" year={year} totalFiles={stats.totalFiles} onSaveReport={handleSaveReport} isSaving={isSaving} theme={theme} />,
         ];
     }, [stats, year, aiInsight, isLoadingInsight, insightError, generateInsight, currentSlide, handleSaveReport, isSaving, theme]);
-    
+
     // Keyboard navigation
     useEffect(() => {
         if (!isOpen) return;
-        
+
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 onClose();
@@ -2613,28 +2616,28 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 setCurrentSlide(prev => Math.max(prev - 1, 0));
             }
         };
-        
+
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, slides.length, onClose]);
-    
+
     // Reset slide when opening
     useEffect(() => {
         if (isOpen) {
             setCurrentSlide(0);
         }
     }, [isOpen]);
-    
+
     if (!isOpen || !stats) return null;
-    
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Backdrop */}
-            <div 
+            <div
                 className="absolute inset-0 bg-black/80 backdrop-blur-sm"
                 onClick={onClose}
             />
-            
+
             {/* Navigation - Left Button (outside modal, 10px gap) */}
             <button
                 onClick={() => setCurrentSlide(prev => Math.max(prev - 1, 0))}
@@ -2643,21 +2646,21 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
             >
                 <ChevronLeft className="h-6 w-6" />
             </button>
-            
+
             {/* Navigation - Right Button (outside modal, 10px gap) */}
             <button
                 onClick={() => setCurrentSlide(prev => Math.min(prev + 1, slides.length - 1))}
                 disabled={currentSlide === slides.length - 1}
                 className={cn(
                     "absolute right-[calc(50%-384px-48px-10px)] top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all",
-                    currentSlide === slides.length - 1 
-                        ? "opacity-0 pointer-events-none" 
+                    currentSlide === slides.length - 1
+                        ? "opacity-0 pointer-events-none"
                         : "animate-bounce-gentle"
                 )}
             >
                 <ChevronRight className="h-6 w-6" />
             </button>
-            
+
             {/* Modal */}
             <div className="relative w-full max-w-3xl mx-16 md:mx-20 rounded-3xl overflow-hidden shadow-2xl">
                 {/* Close button */}
@@ -2667,12 +2670,12 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                 >
                     <X className="h-5 w-5" />
                 </button>
-                
+
                 {/* Current Slide */}
                 <div className="relative overflow-hidden">
                     {slides[currentSlide]}
                 </div>
-                
+
                 {/* Dots - Bottom Center */}
                 <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-2">
                     {slides.map((_, idx) => (
@@ -2681,17 +2684,17 @@ export function YearInReviewModal({ isOpen, onClose, files, year }: YearInReview
                             onClick={() => setCurrentSlide(idx)}
                             className={cn(
                                 "h-2 rounded-full transition-all",
-                                idx === currentSlide 
-                                    ? "w-6 bg-white" 
+                                idx === currentSlide
+                                    ? "w-6 bg-white"
                                     : "w-2 bg-white/40 hover:bg-white/60"
                             )}
                         />
                     ))}
                 </div>
-                
+
                 {/* Progress bar */}
                 <div className="absolute top-0 left-0 right-0 h-1 bg-white/10">
-                    <div 
+                    <div
                         className="h-full bg-white/60 transition-all duration-300"
                         style={{ width: `${((currentSlide + 1) / slides.length) * 100}%` }}
                     />

@@ -700,3 +700,248 @@ label,
     opacity: 0.5;
     filter: blur(8px);
 }
+
+/* ============================================
+   File System Enhanced UI Styles
+   ============================================ */
+
+/* File browser card hover effect */
+.file-card-hover {
+    transition: all 0.2s ease;
+}
+
+.file-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.1);
+}
+
+/* Stage progress card */
+.stage-progress-card {
+    transition: all 0.3s ease;
+}
+
+.stage-progress-card.active {
+    box-shadow: 0 0 0 2px rgba(var(--primary), 0.2);
+}
+
+/* File type icon container animation */
+@keyframes file-icon-pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.file-icon-container:hover {
+    animation: file-icon-pulse 0.5s ease;
+}
+
+/* Folder tree item transition */
+.folder-tree-item {
+    transition: all 0.2s ease;
+}
+
+.folder-tree-item:hover {
+    transform: translateX(2px);
+}
+
+/* Progress ring animation */
+@keyframes progress-ring-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.progress-ring-animated {
+    animation: progress-ring-spin 2s linear infinite;
+}
+
+/* File list row hover animation */
+.file-list-row {
+    transition: all 0.15s ease;
+}
+
+.file-list-row:hover {
+    background: linear-gradient(90deg, 
+        rgba(var(--primary), 0.05) 0%, 
+        rgba(var(--primary), 0.02) 100%
+    );
+}
+
+/* Tab indicator animation */
+@keyframes tab-indicator {
+    from {
+        width: 0;
+        opacity: 0;
+    }
+    to {
+        width: 100%;
+        opacity: 1;
+    }
+}
+
+.tab-indicator {
+    animation: tab-indicator 0.2s ease forwards;
+}
+
+/* Status badge glow for processing */
+@keyframes status-glow {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0);
+    }
+}
+
+.status-badge-processing {
+    animation: status-glow 2s ease-in-out infinite;
+}
+
+/* File grid card entrance animation */
+@keyframes card-entrance {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.file-grid-card {
+    animation: card-entrance 0.3s ease forwards;
+}
+
+/* Smooth scrollbar for file lists */
+.file-list-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(155, 155, 155, 0.3) transparent;
+}
+
+.file-list-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.file-list-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.file-list-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(155, 155, 155, 0.3);
+    border-radius: 20px;
+}
+
+.file-list-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(155, 155, 155, 0.5);
+}
+
+/* Glassmorphism effect for cards */
+.glass-card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.dark .glass-card {
+    background: rgba(30, 30, 30, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Gradient text for headings */
+.gradient-text-primary {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.7) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* Local Cocoa skin file system enhancements */
+.skin-local-cocoa .file-browser-bg {
+    background: linear-gradient(135deg, 
+        rgba(245, 230, 211, 0.5) 0%, 
+        rgba(232, 212, 188, 0.3) 100%
+    );
+}
+
+.skin-local-cocoa.dark .file-browser-bg {
+    background: linear-gradient(135deg, 
+        rgba(42, 31, 20, 0.5) 0%, 
+        rgba(35, 25, 15, 0.3) 100%
+    );
+}
+
+/* Stage progress colors for Local Cocoa */
+.skin-local-cocoa .stage-keyword {
+    --stage-color: #059669;
+}
+
+.skin-local-cocoa .stage-semantic {
+    --stage-color: #2563eb;
+}
+
+.skin-local-cocoa .stage-vision {
+    --stage-color: #7c3aed;
+}
+
+/* Folder icon animation */
+@keyframes folder-open {
+    0% {
+        transform: rotateY(0);
+    }
+    50% {
+        transform: rotateY(-15deg);
+    }
+    100% {
+        transform: rotateY(0);
+    }
+}
+
+.folder-icon-animated {
+    animation: folder-open 0.4s ease;
+}
+
+/* Action button hover effect */
+.action-btn {
+    position: relative;
+    overflow: hidden;
+}
+
+.action-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.3s, height 0.3s;
+}
+
+.action-btn:hover::after {
+    width: 200%;
+    height: 200%;
+}
+
+/* Empty state illustration animation */
+@keyframes empty-state-float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+.empty-state-icon {
+    animation: empty-state-float 3s ease-in-out infinite;
+}

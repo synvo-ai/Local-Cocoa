@@ -15,7 +15,6 @@ import fs from 'fs';
 import path from 'path';
 import type { ScannedFile, ScanProgress, ScanStage, ScanOptions, FileKind, FolderNode, ScanDirectory, ScanSettings } from '../../types/files';
 import {
-    scanConfigModule,
     getSmartRecommendedDirectories,
     getSystemExclusions,
     shouldExcludeByName,
@@ -41,16 +40,16 @@ interface ScanContext {
     dateTo: Date | null; // For range filtering (end)
     systemExclusions: string[];
     customExclusions: string[];
-    
+
     // Counters
     scannedCount: number;
     matchedCount: number;
     skippedCount: number;
-    
+
     // Results
     files: ScannedFile[];
     aborted: boolean;
-    
+
     // Batching for performance
     batchBuffer: ScannedFile[];
     lastBatchTime: number;
@@ -60,7 +59,7 @@ interface ScanContext {
 // Send progress update
 function sendProgress(ctx: ScanContext, stage: ScanStage, currentPath?: string) {
     if (ctx.event.sender.isDestroyed()) return;
-    
+
     const stageLabels: Record<ScanStage, string> = {
         idle: 'Ready',
         planning: 'Scanning...', // Not used, but kept for type safety
@@ -70,7 +69,7 @@ function sendProgress(ctx: ScanContext, stage: ScanStage, currentPath?: string) 
         cancelled: 'Cancelled',
         error: 'Failed',
     };
-    
+
     const progress: ScanProgress = {
         status: stage,
         stage: stageLabels[stage],
@@ -80,7 +79,7 @@ function sendProgress(ctx: ScanContext, stage: ScanStage, currentPath?: string) 
         skippedCount: ctx.skippedCount,
         startedAt: new Date().toISOString(),
     };
-    
+
     ctx.event.sender.send('scan:progress', progress);
 }
 
@@ -90,17 +89,17 @@ function shouldExclude(fullPath: string, dirName: string, ctx: ScanContext): boo
     if (shouldExcludeByName(dirName)) {
         return true;
     }
-    
+
     // Check system exclusions
     if (ctx.options.useRecommendedExclusions && shouldExcludeByPath(fullPath, ctx.systemExclusions)) {
         return true;
     }
-    
+
     // Check custom exclusions
     if (ctx.customExclusions.length > 0 && shouldExcludeByPath(fullPath, ctx.customExclusions)) {
         return true;
     }
-    
+
     return false;
 }
 
@@ -121,7 +120,7 @@ async function scanDirectory(dirPath: string, ctx: ScanContext): Promise<void> {
         try {
             entries = await Promise.race([
                 fs.promises.readdir(dirPath, { withFileTypes: true }),
-                new Promise<never>((_, reject) => 
+                new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('readdir timeout')), 5000)
                 )
             ]);
@@ -130,14 +129,14 @@ async function scanDirectory(dirPath: string, ctx: ScanContext): Promise<void> {
             ctx.skippedCount++;
             return;
         }
-        
+
         if (ctx.aborted) return;
 
         for (const entry of entries) {
             if (ctx.aborted) return;
 
             const fullPath = path.join(dirPath, entry.name);
-            
+
             // Skip hidden files/directories
             if (entry.name.startsWith('.')) {
                 ctx.skippedCount++;
@@ -151,7 +150,7 @@ async function scanDirectory(dirPath: string, ctx: ScanContext): Promise<void> {
                         ctx.skippedCount++;
                         continue;
                     }
-                    
+
                     // OPTIMIZATION: Check directory mtime before recursing
                     // If directory hasn't been modified since the time range, skip it entirely
                     // Note: This is a heuristic - directory mtime updates when files are
@@ -160,13 +159,13 @@ async function scanDirectory(dirPath: string, ctx: ScanContext): Promise<void> {
                     try {
                         const dirStats = await Promise.race([
                             fs.promises.stat(fullPath),
-                            new Promise<never>((_, reject) => 
+                            new Promise<never>((_, reject) =>
                                 setTimeout(() => reject(new Error('dir stat timeout')), 500)
                             )
                         ]);
-                        
+
                         let shouldSkipDir = false;
-                        
+
                         // For year-based or custom date ranges (dateFrom/dateTo)
                         if (ctx.dateFrom && ctx.dateTo) {
                             // If directory was last modified BEFORE dateFrom, skip it
@@ -180,7 +179,7 @@ async function scanDirectory(dirPath: string, ctx: ScanContext): Promise<void> {
                                 shouldSkipDir = true;
                             }
                         }
-                        
+
                         if (shouldSkipDir) {
                             ctx.skippedCount++;
                             continue;
@@ -188,35 +187,35 @@ async function scanDirectory(dirPath: string, ctx: ScanContext): Promise<void> {
                     } catch {
                         // If we can't stat the directory, continue with scanning
                     }
-                    
+
                     // Recursively scan subdirectory
                     await scanDirectory(fullPath, ctx);
-                    
+
                 } else if (entry.isFile()) {
                     ctx.scannedCount++;
-                    
+
                     // Send progress updates periodically with file path (not just directory)
                     const currentTime = Date.now();
                     if (currentTime - ctx.lastProgressTime > 200) {
                         sendProgress(ctx, 'scanning', fullPath);
                         ctx.lastProgressTime = currentTime;
                     }
-                    
+
                     // Get file extension
                     const extension = path.extname(entry.name).slice(1).toLowerCase();
-                    
+
                     // Check if this is a supported file type (Code excluded)
                     if (!isSupportedFileType(extension)) {
                         ctx.skippedCount++;
                         continue;
                     }
-                    
+
                     // Get file stats with timeout to avoid hanging on slow files
                     let stats;
                     try {
                         stats = await Promise.race([
                             fs.promises.stat(fullPath),
-                            new Promise<never>((_, reject) => 
+                            new Promise<never>((_, reject) =>
                                 setTimeout(() => reject(new Error('stat timeout')), 1000)
                             )
                         ]);
@@ -225,7 +224,7 @@ async function scanDirectory(dirPath: string, ctx: ScanContext): Promise<void> {
                         ctx.skippedCount++;
                         continue;
                     }
-                    
+
                     const modifiedAt = stats.mtime;
 
                     // Check time range filter
@@ -243,7 +242,7 @@ async function scanDirectory(dirPath: string, ctx: ScanContext): Promise<void> {
 
                     // Get file kind
                     const kind = getFileKindFromExtension(extension) || 'other';
-                    
+
                     // Detect origin
                     const origin = detectFileOrigin(fullPath);
 
@@ -287,39 +286,39 @@ async function scanDirectory(dirPath: string, ctx: ScanContext): Promise<void> {
 function buildFolderTree(files: ScannedFile[], rootPaths: string[], filterKind?: FileKind): FolderNode[] {
     // Group files by their parent paths
     const filesByPath = new Map<string, ScannedFile[]>();
-    
+
     for (const file of files) {
         // Filter by kind if specified
         if (filterKind && file.kind !== filterKind) {
             continue;
         }
-        
+
         const parentPath = file.parentPath || path.dirname(file.path);
         if (!filesByPath.has(parentPath)) {
             filesByPath.set(parentPath, []);
         }
         filesByPath.get(parentPath)!.push(file);
     }
-    
+
     // Build tree structure from root paths
     const trees: FolderNode[] = [];
-    
+
     for (const rootPath of rootPaths) {
         const tree = buildFolderNodeRecursive(rootPath, filesByPath);
         if (tree && tree.totalFileCount > 0) {
             trees.push(tree);
         }
     }
-    
+
     return trees;
 }
 
 function buildFolderNodeRecursive(
-    dirPath: string, 
+    dirPath: string,
     filesByPath: Map<string, ScannedFile[]>
 ): FolderNode | null {
     const directFiles = filesByPath.get(dirPath) || [];
-    
+
     // Find all subdirectories that have files
     const childPaths: string[] = [];
     for (const [filePath] of filesByPath) {
@@ -333,7 +332,7 @@ function buildFolderNodeRecursive(
             }
         }
     }
-    
+
     // Build child nodes
     const children: FolderNode[] = [];
     for (const childPath of childPaths) {
@@ -342,14 +341,14 @@ function buildFolderNodeRecursive(
             children.push(childNode);
         }
     }
-    
+
     // Calculate totals
     const totalFileCount = directFiles.length + children.reduce((sum, c) => sum + c.totalFileCount, 0);
-    const totalSize = directFiles.reduce((sum, f) => sum + f.size, 0) + 
-                      children.reduce((sum, c) => sum + c.totalSize, 0);
-    
+    const totalSize = directFiles.reduce((sum, f) => sum + f.size, 0) +
+        children.reduce((sum, c) => sum + c.totalSize, 0);
+
     // Find latest modified
-    let latestModified = directFiles.length > 0 
+    let latestModified = directFiles.length > 0
         ? directFiles.reduce((max, f) => f.modifiedAt > max ? f.modifiedAt : max, directFiles[0].modifiedAt)
         : '';
     for (const child of children) {
@@ -357,12 +356,12 @@ function buildFolderNodeRecursive(
             latestModified = child.latestModified;
         }
     }
-    
+
     // Prune: don't return node if no files in subtree
     if (totalFileCount === 0) {
         return null;
     }
-    
+
     return {
         path: dirPath,
         name: path.basename(dirPath) || dirPath,
@@ -380,7 +379,7 @@ export function registerScanHandlers(windowManager?: WindowManager) {
     ipcMain.handle('scan:get-recommended-directories', async () => {
         return getSmartRecommendedDirectories();
     });
-    
+
     // Get system exclusions list
     ipcMain.handle('scan:get-exclusions', async () => {
         return {
@@ -388,30 +387,30 @@ export function registerScanHandlers(windowManager?: WindowManager) {
             universal: UNIVERSAL_DIR_EXCLUSIONS,
         };
     });
-    
+
     // Load saved settings
     ipcMain.handle('scan:get-settings', async () => {
         const settings = loadScanSettings();
         return settings || getDefaultScanSettings();
     });
-    
+
     // Save settings
     ipcMain.handle('scan:save-settings', async (_event, settings: ScanSettings) => {
         saveScanSettings(settings);
         return { success: true };
     });
-    
+
     // Pick directories dialog
     ipcMain.handle('scan:pick-directories', async (event) => {
         const result = await dialog.showOpenDialog({
             properties: ['openDirectory', 'multiSelections'],
             title: 'Select folders to scan',
         });
-        
+
         if (result.canceled || result.filePaths.length === 0) {
             return [];
         }
-        
+
         return result.filePaths.map(p => ({
             path: p,
             label: path.basename(p),
@@ -419,12 +418,12 @@ export function registerScanHandlers(windowManager?: WindowManager) {
             selected: true,
         })) as ScanDirectory[];
     });
-    
+
     // Build folder tree from already scanned files
-    ipcMain.handle('scan:build-tree', async (_event, payload: { 
-        files: ScannedFile[]; 
-        rootPaths: string[]; 
-        filterKind?: FileKind 
+    ipcMain.handle('scan:build-tree', async (_event, payload: {
+        files: ScannedFile[];
+        rootPaths: string[];
+        filterKind?: FileKind
     }) => {
         return buildFolderTree(payload.files, payload.rootPaths, payload.filterKind);
     });
@@ -444,7 +443,7 @@ export function registerScanHandlers(windowManager?: WindowManager) {
         const dateFrom = payload?.dateFrom ? new Date(payload.dateFrom) : null;
         const dateTo = payload?.dateTo ? new Date(payload.dateTo) : null;
         const directories = payload?.directories || [];
-        
+
         if (directories.length === 0) {
             event.sender.send('scan:error', 'No directories selected for scanning');
             return;
@@ -476,11 +475,11 @@ export function registerScanHandlers(windowManager?: WindowManager) {
 
             // Start scanning
             sendProgress(ctx, 'scanning');
-            
+
             // Scan each directory
             for (const dir of directories) {
                 if (ctx.aborted) break;
-                
+
                 // Verify directory exists
                 try {
                     const stat = await fs.promises.stat(dir);
@@ -488,7 +487,7 @@ export function registerScanHandlers(windowManager?: WindowManager) {
                 } catch {
                     continue;
                 }
-                
+
                 await scanDirectory(dir, ctx);
             }
 
@@ -511,8 +510,8 @@ export function registerScanHandlers(windowManager?: WindowManager) {
                     completedAt: new Date().toISOString(),
                 };
                 event.sender.send('scan:progress', completeProgress);
-                event.sender.send('scan:done', { 
-                    files: ctx.files, 
+                event.sender.send('scan:done', {
+                    files: ctx.files,
                     folderTree,
                     partial: ctx.aborted,
                 });

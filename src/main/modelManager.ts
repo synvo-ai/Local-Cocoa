@@ -22,6 +22,7 @@ interface ModelConfig {
     activeModelId: string;
     activeEmbeddingModelId: string;
     activeRerankerModelId: string;
+    activeAudioModelId: string;  // Whisper model for speech recognition
     contextSize: number;
     visionMaxPixels: number;
     videoMaxPixels: number;
@@ -36,6 +37,8 @@ interface ModelConfig {
     debugMode?: boolean;
 }
 
+
+
 export class ModelManager extends EventEmitter {
     private readonly modelRootPath: string;
     private readonly projectRoot: string;
@@ -48,6 +51,7 @@ export class ModelManager extends EventEmitter {
         activeModelId: 'vlm',
         activeEmbeddingModelId: 'embedding-q4',
         activeRerankerModelId: 'reranker',
+        activeAudioModelId: 'whisper-small',  // Multi-language whisper model
         contextSize: 8192,
         visionMaxPixels: 1003520,
         videoMaxPixels: 307200,  // ~640×480, lower than images for faster video processing
@@ -67,15 +71,7 @@ export class ModelManager extends EventEmitter {
         super();
         this.projectRoot = projectRoot;
 
-        // In production (packaged), we must use userData as the app bundle is read-only.
-        // In development, we keep using the local project folder for convenience.
-        if (modelRoot) {
-            this.modelRootPath = modelRoot;
-        } else if (app.isPackaged) {
-            this.modelRootPath = path.join(app.getPath('userData'), 'models');
-        } else {
-            this.modelRootPath = path.join(projectRoot, 'runtime', 'local-cocoa-models', 'pretrained');
-        }
+        this.modelRootPath = modelRoot ? modelRoot : path.join(app.getPath('userData'), 'local-cocoa-models', 'pretrained');
 
         this.configPath = path.join(app.getPath('userData'), 'model-config.json');
         this.modelsConfigPath = path.join(projectRoot, 'config', 'models.config.json');
@@ -205,10 +201,9 @@ export class ModelManager extends EventEmitter {
         }
 
         const status = await this.getStatus();
-        if (status.ready) {
-            this.emitProgress({ state: 'completed', percent: 100, message: 'Models already available.', statuses: status.assets });
-            return status;
-        }
+
+        // Note: We don't return early if status.ready is true, because there might
+        // be optional assets that are missing and we want to download them too.
 
         // Download all missing assets (including optional ones if they are missing)
         const assetsToDownload = this.descriptors.filter(d => {
@@ -236,6 +231,14 @@ export class ModelManager extends EventEmitter {
         for (const asset of assetsToDownload) {
             try {
                 await this.downloadDescriptor(asset);
+                // Emit status update after each successful download so UI updates incrementally
+                const currentStatus = await this.getStatus();
+                this.emitProgress({
+                    state: 'downloading',
+                    assetId: asset.id,
+                    message: `${asset.label} downloaded.`,
+                    statuses: currentStatus.assets
+                });
             } catch (error: any) {
                 this.emitProgress({ state: 'error', message: `Failed to download ${asset.label}: ${error.message}` });
                 throw error;

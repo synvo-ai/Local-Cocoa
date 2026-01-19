@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { createWriteStream } from 'fs';
 import archiver from 'archiver';
-import { getHealth } from '../backendClient';
+import { getHealth, getLocalKey, setManualKeyOverride } from '../backendClient';
 import { WindowManager } from '../windowManager';
 import { getLogsDirectory } from '../logger';
 
@@ -60,21 +60,12 @@ export function registerSystemHandlers(windowManager: WindowManager) {
     ipcMain.handle('health:ping', async () => getHealth());
 
     ipcMain.handle('auth:get-local-key', async () => {
-        let ragHome = process.env.LOCAL_RAG_HOME;
-        if (!ragHome) {
-             const userDataPath = app.getPath('userData');
-             ragHome = path.join(userDataPath, 'local_rag');
-        }
-        
-        const keyPath = path.join(ragHome, 'local_key.txt');
-        try {
-            if (fs.existsSync(keyPath)) {
-                return fs.readFileSync(keyPath, 'utf-8').trim();
-            }
-        } catch (e) {
-            console.error('Failed to read local key:', e);
-        }
-        return null;
+        return getLocalKey();
+    });
+
+    ipcMain.handle('auth:set-local-key', async (_event, key: string | null) => {
+        setManualKeyOverride(key);
+        return true;
     });
 
     ipcMain.handle('system:open-external', async (_event, url: string) => {
@@ -144,18 +135,18 @@ export function registerSystemHandlers(windowManager: WindowManager) {
     });
 
     // Save image to file with dialog
-    ipcMain.handle('system:save-image', async (_event, options: { 
+    ipcMain.handle('system:save-image', async (_event, options: {
         data: string; // base64 data URL
         defaultName?: string;
         title?: string;
     }) => {
         const { data, defaultName = 'image.png', title = 'Save Image' } = options;
-        
+
         const mainWindow = windowManager.mainWindow;
         if (!mainWindow) {
             throw new Error('No main window available');
         }
-        
+
         const result = await dialog.showSaveDialog(mainWindow, {
             title,
             defaultPath: path.join(app.getPath('downloads'), defaultName),
@@ -164,17 +155,17 @@ export function registerSystemHandlers(windowManager: WindowManager) {
                 { name: 'All Files', extensions: ['*'] }
             ]
         });
-        
+
         if (result.canceled || !result.filePath) {
             return { saved: false, path: null };
         }
-        
+
         // Extract base64 data from data URL
         const base64Data = data.replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
-        
+
         await fs.promises.writeFile(result.filePath, buffer);
-        
+
         return { saved: true, path: result.filePath };
     });
 
@@ -311,7 +302,7 @@ export function registerSystemHandlers(windowManager: WindowManager) {
                 `Log Files Included:`,
                 ...logFiles.map(f => `  - ${f.name}`)
             ].join('\n');
-            
+
             archive.append(systemInfo, { name: 'system-info.txt' });
 
             archive.finalize();

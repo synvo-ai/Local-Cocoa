@@ -153,6 +153,13 @@ export function useModelStatus() {
         }
         const unsubscribe = window.api?.onModelDownloadEvent?.((payload) => {
             setModelDownloadEvent(payload);
+
+            // Update status immediately if event contains updated statuses (incremental updates)
+            if (payload.statuses) {
+                setModelStatus((prev) => prev ? { ...prev, assets: payload.statuses! } : prev);
+                setAvailableModels(payload.statuses);
+            }
+
             if (payload.state === 'completed') {
                 bootstrapTriggerRef.current = false;
                 void refreshModelStatus();

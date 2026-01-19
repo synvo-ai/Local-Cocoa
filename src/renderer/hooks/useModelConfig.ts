@@ -4,6 +4,7 @@ interface ModelConfig {
     activeModelId: string;
     activeEmbeddingModelId: string;
     activeRerankerModelId: string;
+    activeAudioModelId: string;  // Whisper model for speech recognition
     contextSize: number;
     visionMaxPixels: number;
     videoMaxPixels: number;
@@ -17,6 +18,8 @@ interface ModelConfig {
     visionBatchDelayMs?: number;
     debugMode?: boolean;
 }
+
+
 
 export function useModelConfig() {
     const [config, setConfig] = useState<ModelConfig | null>(null);

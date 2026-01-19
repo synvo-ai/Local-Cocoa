@@ -1,0 +1,143 @@
+{
+  "app": {
+    "name": "Local Cocoa",
+    "tagline": "Your private AI workspace"
+  },
+  "common": {
+    "search": "Search",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish",
+    "settings": "Settings",
+    "language": "Language"
+  },
+  "startup": {
+    "connecting": "Connecting to services...",
+    "startingBackend": "Starting backend services...",
+    "modelsReady": "Models ready",
+    "welcome": "Welcome to Local Cocoa"
+  },
+  "onboarding": {
+    "welcome": "Welcome!",
+    "welcomeDescription": "Your private AI workspace that runs entirely on your device. Your data never leaves your machine.",
+    "private": "100% Private",
+    "runsLocally": "Runs Locally",
+    "allYourFiles": "All Your Files",
+    "aiPowered": "AI Powered",
+    "downloadModels": "Downloading AI Models",
+    "downloadDescription": "Sit back and relax while we download the AI models. This only happens once.",
+    "allSet": "You're All Set!",
+    "allSetDescription": "All AI models are ready. You can now use Local Cocoa to its full potential."
+  },
+  "chat": {
+    "title": "Ask your workspace",
+    "placeholder": "Type your message...",
+    "howCanIHelp": "How can I help you today?",
+    "helpDescription": "I can help you search, analyze, and summarize your workspace documents.",
+    "newConversation": "New Conversation",
+    "resetConversation": "Reset Conversation"
+  },
+  "knowledge": {
+    "title": "Knowledge Base",
+    "folders": "Folders",
+    "files": "Files",
+    "addFolder": "Add Folder",
+    "addFile": "Add File",
+    "removeFolder": "Remove Folder",
+    "rescanFolder": "Rescan Folder",
+    "reindexFolder": "Reindex Folder",
+    "indexed": "indexed",
+    "pending": "pending"
+  },
+  "search": {
+    "searching": "Searching...",
+    "searchComplete": "Search complete",
+    "noResults": "No results found",
+    "stages": {
+      "filename": "Searching filenames...",
+      "summary": "Searching summaries...",
+      "metadata": "Searching metadata...",
+      "hybrid": "Deep semantic search...",
+      "complete": "Search complete"
+    }
+  },
+  "indexing": {
+    "indexing": "Indexing...",
+    "paused": "Paused",
+    "starting": "Starting...",
+    "scanning": "Scanning...",
+    "processing": "Processing...",
+    "fastMode": "Fast Mode",
+    "deepMode": "Deep Mode",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stop": "Stop"
+  },
+  "models": {
+    "title": "Model Management",
+    "activeModel": "Active Model",
+    "availableModels": "Available Models",
+    "downloadModel": "Download Model",
+    "modelSettings": "Model Settings",
+    "contextSize": "Context Size",
+    "visionPerformance": "Vision Performance",
+    "maxResolution": "Max Resolution"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Manage application preferences",
+    "general": "General",
+    "models": "Models",
+    "retrievalIndexing": "Retrieval & Indexing",
+    "security": "Security",
+    "scanScope": "Scan Scope",
+    "plugins": "Plugins",
+    "language": "Language",
+    "languageDescription": "Choose your preferred language",
+    "theme": "Theme",
+    "appearance": "Appearance",
+    "skin": "Skin",
+    "skinDescription": "Choose a visual style for the interface",
+    "systemHealth": "System Health",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "diagnostics": "Diagnostics & Support"
+  },
+  "notifications": {
+    "contextTooLarge": "This request is too large for the model context window. Try lowering Vision Performance (Max Resolution) or increasing Context Size in Models.",
+    "folderAdded": "Folder added successfully",
+    "folderRemoved": "Folder removed successfully",
+    "indexingStarted": "Indexing started",
+    "indexingComplete": "Indexing complete",
+    "errorOccurred": "An error occurred"
+  },
+  "extensions": {
+    "title": "Extensions",
+    "plugins": "Plugins",
+    "email": "Email",
+    "notes": "Notes",
+    "activity": "Activity"
+  },
+  "scan": {
+    "title": "Quick Scan",
+    "description": "Scan files by modification date"
+  },
+  "mbti": {
+    "title": "MBTI Analysis",
+    "startAnalysis": "Start Analysis",
+    "stopAnalysis": "Stop Analysis",
+    "analyzing": "Analyzing...",
+    "generatingReport": "Generating Report..."
+  }
+}
+

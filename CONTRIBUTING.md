@@ -73,6 +73,53 @@ Please follow these steps to have your contribution considered by the maintainer
 5.  Make sure your code lints.
 6.  Issue that pull request!
 
+## Code Quality
+
+### Pre-commit Hooks
+
+This project uses **husky** and **lint-staged** to automatically check code quality before each commit. When you run `npm install`, the pre-commit hooks are automatically set up.
+
+**What happens on commit:**
+1. Only staged `.ts` and `.tsx` files are checked
+2. ESLint runs with `--fix` to auto-fix simple issues
+3. ESLint runs again to catch remaining errors
+4. If errors exist, the commit is **blocked** until you fix them
+
+**Common issues that will block commits:**
+- ❌ Unused imports
+- ❌ Unused variables (prefix with `_` to ignore, e.g., `_unusedVar`)
+- ❌ React hooks violations
+- ❌ TypeScript errors
+
+**Bypassing hooks (emergency only):**
+```bash
+git commit --no-verify -m "your message"
+```
+> ⚠️ Use sparingly! This should only be used in emergencies.
+
+### Running Lint Manually
+
+```bash
+# Check for errors
+npm run lint
+
+# Check and auto-fix
+npm run lint:fix
+
+# Type checking only
+npm run typecheck
+```
+
+### ESLint Rules
+
+Key rules enforced (see `.eslintrc.cjs`):
+
+| Rule | Level | Description |
+|------|-------|-------------|
+| `@typescript-eslint/no-unused-vars` | error | No unused variables/imports (use `_` prefix to ignore) |
+| `react-hooks/rules-of-hooks` | error | Correct use of React hooks |
+| `react-hooks/exhaustive-deps` | warn | Correct dependency arrays |
+
 ## Styleguides
 
 ### Git Commit Messages

@@ -1,3 +1,4 @@
+
 import { app } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -6,6 +7,11 @@ import type {
     AgentDiagnostics,
     AgentStep,
     AgentStepFile,
+    EmailAccountPayload,
+    EmailAccountSummary,
+    EmailMessageContent,
+    EmailMessageSummary,
+    EmailSyncResult,
     FileKind,
     FileListResponse,
     FileRecord,
@@ -38,7 +44,7 @@ export interface FailedFile {
 const API_BASE_URL = process.env.LOCAL_RAG_API_URL ?? 'http://127.0.0.1:8890';
 
 export type IndexOperationMode = 'rescan' | 'reindex';
-export type IndexOperationScope = 'global' | 'folder' | 'notes';
+export type IndexOperationScope = 'global' | 'folder' | 'email' | 'notes';
 
 export interface IndexOperationOptions {
     mode?: IndexOperationMode;
@@ -48,17 +54,34 @@ export interface IndexOperationOptions {
     refreshEmbeddings?: boolean;
     dropCollection?: boolean;
     purgeFolders?: string[];
-    indexing_mode?: 'fast' | 'fine';
+    indexing_mode?: 'fast' | 'deep';
 }
 
 let cachedKey: string | null = null;
+let manualKeyOverride: string | null = null;
 
-function getLocalKey(): string | null {
+export function setSessionToken(token: string): void {
+    cachedKey = token;
+    console.log('[BackendClient] Session token set');
+}
+
+export function setManualKeyOverride(token: string | null): void {
+    const trimmed = token?.trim();
+    manualKeyOverride = trimmed ? trimmed : null;
+    if (manualKeyOverride) {
+        cachedKey = manualKeyOverride;
+    }
+    console.log('[BackendClient] Manual API key override set:', manualKeyOverride ? 'yes' : 'no');
+}
+
+export function getLocalKey(): string | null {
+    if (manualKeyOverride) return manualKeyOverride;
+
     // Always try to read the key if not cached yet
     if (cachedKey) return cachedKey;
-    
+
     let ragHome: string;
-    
+
     // In development mode, use LOCAL_RAG_HOME env var if set
     // In production (packaged app), always use userData path
     if (!app.isPackaged && process.env.LOCAL_RAG_HOME) {
@@ -72,7 +95,7 @@ function getLocalKey(): string | null {
             return null;
         }
     }
-    
+
     const keyPath = path.join(ragHome, 'local_key.txt');
     try {
         if (fs.existsSync(keyPath)) {
@@ -114,6 +137,9 @@ async function requestJson<T>(endpoint: string, init?: RequestInit): Promise<T> 
     const key = getLocalKey();
     if (key) {
         headers.set('X-API-Key', key);
+        // IMPORTANT: Mark all requests from Electron app as local_ui for privacy access
+        // This allows access to private files from the Local Cocoa UI
+        headers.set('X-Request-Source', 'local_ui');
     } else {
         console.warn('[BackendClient] No API key available for request to:', endpoint);
     }
@@ -144,7 +170,7 @@ async function requestJson<T>(endpoint: string, init?: RequestInit): Promise<T> 
 async function requestBinary(endpoint: string, init?: RequestInit): Promise<Uint8Array> {
     const url = resolveEndpoint(endpoint);
     const headers = new Headers(init?.headers ?? {});
-    
+
     const key = getLocalKey();
     if (key) {
         headers.set('X-API-Key', key);
@@ -223,7 +249,8 @@ function mapFolder(payload: any): FolderRecord {
         lastIndexedAt: payload.last_indexed_at ?? payload.lastIndexedAt ?? null,
         enabled: payload.enabled ?? true,
         failedFiles: Array.isArray(payload.failed_files) ? payload.failed_files.map(mapFailedFile) : [],
-        indexedCount: Number(payload.indexed_count ?? payload.indexedCount ?? 0)
+        indexedCount: Number(payload.indexed_count ?? payload.indexedCount ?? 0),
+        privacyLevel: payload.privacy_level ?? payload.privacyLevel ?? 'normal'
     };
 }
 
@@ -248,6 +275,8 @@ function mapFile(payload: any): FileRecord & { fullPath?: string; location?: str
         // Extended fields for IndexedFile
         fullPath: payload.full_path ?? payload.fullPath ?? path,
         location: payload.location ?? '',
+        // Privacy level
+        privacyLevel: payload.privacy_level ?? payload.privacyLevel ?? 'normal',
     };
 }
 
@@ -363,6 +392,65 @@ function mapQaResponse(payload: any): QaResponse {
     };
 }
 
+function mapEmailAccount(payload: any): EmailAccountSummary {
+    return {
+        id: String(payload.id ?? payload.account_id ?? ''),
+        label: payload.label ?? 'Email account',
+        protocol: (payload.protocol ?? 'imap') as EmailAccountSummary['protocol'],
+        host: payload.host ?? '',
+        port: Number(payload.port ?? 0),
+        username: payload.username ?? '',
+        useSsl: Boolean(payload.use_ssl ?? payload.useSsl ?? true),
+        folder: payload.folder ?? null,
+        enabled: Boolean(payload.enabled ?? true),
+        createdAt: payload.created_at ?? payload.createdAt ?? new Date().toISOString(),
+        updatedAt: payload.updated_at ?? payload.updatedAt ?? new Date().toISOString(),
+        lastSyncedAt: payload.last_synced_at ?? payload.lastSyncedAt ?? null,
+        lastSyncStatus: payload.last_sync_status ?? payload.lastSyncStatus ?? null,
+        totalMessages: Number(payload.total_messages ?? payload.totalMessages ?? 0),
+        recentNewMessages: Number(payload.recent_new_messages ?? payload.recentNewMessages ?? 0),
+        folderId: String(payload.folder_id ?? payload.folderId ?? ''),
+        folderPath: payload.folder_path ?? payload.folderPath ?? ''
+    };
+}
+
+function mapEmailSyncResult(payload: any): EmailSyncResult {
+    return {
+        accountId: String(payload.account_id ?? payload.accountId ?? ''),
+        folderId: String(payload.folder_id ?? payload.folderId ?? ''),
+        folderPath: payload.folder_path ?? payload.folderPath ?? '',
+        newMessages: Number(payload.new_messages ?? payload.newMessages ?? 0),
+        totalMessages: Number(payload.total_messages ?? payload.totalMessages ?? 0),
+        indexed: Number(payload.indexed ?? 0),
+        lastSyncedAt: payload.last_synced_at ?? payload.lastSyncedAt ?? new Date().toISOString(),
+        status: (payload.status ?? 'ok') as EmailSyncResult['status'],
+        message: payload.message ?? null
+    };
+}
+
+function mapEmailMessageSummary(payload: any): EmailMessageSummary {
+    return {
+        id: String(payload.id ?? ''),
+        accountId: String(payload.account_id ?? payload.accountId ?? ''),
+        subject: payload.subject ?? null,
+        sender: payload.sender ?? null,
+        recipients: Array.isArray(payload.recipients) ? payload.recipients.map(String) : [],
+        sentAt: payload.sent_at ?? payload.sentAt ?? null,
+        storedPath: payload.stored_path ?? payload.storedPath ?? '',
+        size: Number(payload.size ?? 0),
+        createdAt: payload.created_at ?? payload.createdAt ?? new Date().toISOString(),
+        preview: payload.preview ?? null
+    };
+}
+
+function mapEmailMessageContent(payload: any): EmailMessageContent {
+    const summary = mapEmailMessageSummary(payload);
+    return {
+        ...summary,
+        markdown: payload.markdown ?? ''
+    };
+}
+
 function mapNoteSummary(payload: any): NoteSummary {
     return {
         id: String(payload.id ?? ''),
@@ -392,8 +480,8 @@ function mapChatMessage(payload: any): ConversationMessage {
         references: Array.isArray(payload.references) ? payload.references.map(mapSearchHit) : undefined,
         // Multi-path thinking steps
         isMultiPath: payload.is_multi_path ?? payload.isMultiPath,
-        thinkingSteps: Array.isArray(payload.thinking_steps ?? payload.thinkingSteps) 
-            ? (payload.thinking_steps ?? payload.thinkingSteps) 
+        thinkingSteps: Array.isArray(payload.thinking_steps ?? payload.thinkingSteps)
+            ? (payload.thinking_steps ?? payload.thinkingSteps)
             : undefined
     };
 }
@@ -407,7 +495,7 @@ function mapChatSession(payload: any): ChatSession {
     };
 }
 
-export async function updateSettings(settings: { 
+export async function updateSettings(settings: {
     vision_max_pixels?: number;
     search_result_limit?: number;
     qa_context_limit?: number;
@@ -426,7 +514,7 @@ export async function updateSettings(settings: {
 
 export async function getHealth(): Promise<HealthStatus> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
     try {
         const data = await requestJson('/health', {
             method: 'GET',
@@ -449,7 +537,9 @@ export async function getHealth(): Promise<HealthStatus> {
 
 export async function listFolders(): Promise<FolderRecord[]> {
     const data = await requestJson<{ folders: any[] }>('/folders', { method: 'GET' });
+    console.log('[BackendClient] listFolders raw response:', data);
     const folders = Array.isArray(data.folders) ? data.folders : [];
+    console.log('[BackendClient] listFolders mapped folders:', folders.length);
     return folders.map(mapFolder);
 }
 
@@ -478,7 +568,7 @@ export async function runIndex(options?: IndexOperationOptions): Promise<IndexPr
         folders: options?.folders ?? null,
         files: options?.files ?? null,
     };
-    
+
     // Only set indexing_mode if explicitly provided; otherwise let backend use configured default
     if (options?.indexing_mode) {
         payload.indexing_mode = options.indexing_mode;
@@ -516,6 +606,99 @@ export async function pauseIndexing(): Promise<IndexProgressUpdate> {
 
 export async function resumeIndexing(): Promise<IndexProgressUpdate> {
     const data = await requestJson('/index/resume', { method: 'POST' });
+    return mapProgress(data);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Staged Indexing (Two-Round Progressive System)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface StageProgress {
+    pending: number;
+    done: number;
+    error: number;
+    percent: number;
+    enabled?: boolean;
+    skipped?: number;
+}
+
+export interface StagedIndexProgress {
+    total: number;
+    fast_text: StageProgress;
+    fast_embed: StageProgress & { enabled: boolean };
+    deep: StageProgress & { enabled: boolean };
+    paused: { fast_text: boolean; fast_embed: boolean; deep: boolean };
+    semantic_enabled: boolean;
+    deep_enabled: boolean;
+}
+
+export interface DeepStatusResponse {
+    deep_enabled: boolean;
+    deep_progress: StageProgress;
+    message: string;
+}
+
+export interface DeepControlResponse {
+    deep_enabled: boolean;
+    started?: boolean;
+    stopped?: boolean;
+    message: string;
+}
+
+export async function getStageProgress(folderId?: string): Promise<StagedIndexProgress> {
+    const url = new URL(resolveEndpoint('/index/stage-progress'));
+    if (folderId) {
+        url.searchParams.set('folder_id', folderId);
+    }
+    return requestJson<StagedIndexProgress>(url.toString(), { method: 'GET' });
+}
+
+export interface SemanticControlResponse {
+    semantic_enabled: boolean;
+    started?: boolean;
+    stopped?: boolean;
+    message: string;
+}
+
+export async function startSemanticIndexing(): Promise<SemanticControlResponse> {
+    return requestJson<SemanticControlResponse>('/index/start-semantic', { method: 'POST' });
+}
+
+export async function stopSemanticIndexing(): Promise<SemanticControlResponse> {
+    return requestJson<SemanticControlResponse>('/index/stop-semantic', { method: 'POST' });
+}
+
+export async function startDeepIndexing(): Promise<DeepControlResponse> {
+    return requestJson<DeepControlResponse>('/index/start-deep', { method: 'POST' });
+}
+
+export async function stopDeepIndexing(): Promise<DeepControlResponse> {
+    return requestJson<DeepControlResponse>('/index/stop-deep', { method: 'POST' });
+}
+
+export async function getDeepStatus(): Promise<DeepStatusResponse> {
+    return requestJson<DeepStatusResponse>('/index/deep-status', { method: 'GET' });
+}
+
+export async function runStagedIndex(options?: { 
+    folders?: string[]; 
+    files?: string[];
+    mode?: 'rescan' | 'reindex';
+}): Promise<IndexProgressUpdate> {
+    const payload: Record<string, unknown> = {};
+    if (options?.folders) {
+        payload.folders = options.folders;
+    }
+    if (options?.files) {
+        payload.files = options.files;
+    }
+    if (options?.mode) {
+        payload.mode = options.mode;
+    }
+    const data = await requestJson('/index/run-staged', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
     return mapProgress(data);
 }
 
@@ -603,6 +786,82 @@ export async function deleteIndexedFile(fileId: string): Promise<void> {
     await requestJson(`/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' });
 }
 
+// Plugin API prefixes
+const MAIL_PLUGIN_PREFIX = '/plugins/mail';
+const NOTES_PLUGIN_PREFIX = '/plugins/notes';
+const ACTIVITY_PLUGIN_PREFIX = '/plugins/activity';
+
+export async function listEmailAccounts(): Promise<EmailAccountSummary[]> {
+    const data = await requestJson<any[]>(`${MAIL_PLUGIN_PREFIX}/accounts`, { method: 'GET' });
+    const payload = Array.isArray(data) ? data : [];
+    return payload.map(mapEmailAccount);
+}
+
+export async function startOutlookAuth(clientId: string, tenantId: string): Promise<{ flow_id: string }> {
+    return requestJson(`${MAIL_PLUGIN_PREFIX}/outlook/auth`, {
+        method: 'POST',
+        body: JSON.stringify({ client_id: clientId, tenant_id: tenantId })
+    });
+}
+
+export async function getOutlookAuthStatus(flowId: string): Promise<any> {
+    return requestJson(`${MAIL_PLUGIN_PREFIX}/outlook/auth/${flowId}`, { method: 'GET' });
+}
+
+export async function completeOutlookSetup(flowId: string, label: string): Promise<EmailAccountSummary> {
+    const data = await requestJson<any>(`${MAIL_PLUGIN_PREFIX}/outlook/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ flow_id: flowId, label })
+    });
+    return mapEmailAccount(data);
+}
+
+export async function addEmailAccount(payload: EmailAccountPayload): Promise<EmailAccountSummary> {
+    const body = {
+        label: payload.label,
+        protocol: payload.protocol,
+        host: payload.host,
+        port: payload.port,
+        username: payload.username,
+        password: payload.password,
+        use_ssl: payload.useSsl ?? true,
+        folder: payload.folder
+    };
+    const data = await requestJson(`${MAIL_PLUGIN_PREFIX}/accounts`, {
+        method: 'POST',
+        body: JSON.stringify(body)
+    });
+    return mapEmailAccount(data);
+}
+
+export async function removeEmailAccount(accountId: string): Promise<void> {
+    await requestJson(`${MAIL_PLUGIN_PREFIX}/accounts/${encodeURIComponent(accountId)}`, { method: 'DELETE' });
+}
+
+export async function syncEmailAccount(accountId: string, limit?: number): Promise<EmailSyncResult> {
+    const payload = {
+        limit: limit ?? 100
+    };
+    const data = await requestJson(`${MAIL_PLUGIN_PREFIX}/accounts/${encodeURIComponent(accountId)}/sync`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
+    return mapEmailSyncResult(data);
+}
+
+export async function listEmailMessages(accountId: string, limit = 50): Promise<EmailMessageSummary[]> {
+    const url = new URL(resolveEndpoint(`${MAIL_PLUGIN_PREFIX}/accounts/${encodeURIComponent(accountId)}/messages`));
+    url.searchParams.set('limit', String(limit));
+    const data = await requestJson<any[]>(url.toString(), { method: 'GET' });
+    const payload = Array.isArray(data) ? data : [];
+    return payload.map(mapEmailMessageSummary);
+}
+
+export async function getEmailMessage(messageId: string): Promise<EmailMessageContent> {
+    const data = await requestJson(`${MAIL_PLUGIN_PREFIX}/messages/${encodeURIComponent(messageId)}`, { method: 'GET' });
+    return mapEmailMessageContent(data);
+}
+
 export async function searchFiles(query: string, limit = 10): Promise<SearchResponse> {
     const trimmed = query?.trim() ?? '';
     if (!trimmed) {
@@ -682,8 +941,8 @@ export async function searchFilesStream(
 }
 
 export async function askWorkspace(
-    query: string, 
-    limit = 5, 
+    query: string,
+    limit = 5,
     mode: 'qa' | 'chat' = 'qa',
     searchMode: 'auto' | 'knowledge' | 'direct' = 'auto'
 ): Promise<QaResponse> {
@@ -705,9 +964,10 @@ export async function askWorkspaceStream(
     onData: (chunk: string) => void,
     onError: (error: Error) => void,
     onDone: () => void,
-    searchMode: 'auto' | 'knowledge' | 'direct' = 'auto'
+    searchMode: 'auto' | 'knowledge' | 'direct' = 'auto',
+    resumeToken?: string
 ): Promise<void> {
-    const payload = { query, mode, limit, search_mode: searchMode };
+    const payload = { query, mode, limit, search_mode: searchMode, resume_token: resumeToken };
     try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         const key = getLocalKey();
@@ -748,7 +1008,7 @@ export async function askWorkspaceStream(
 }
 
 export async function listNotes(): Promise<NoteSummary[]> {
-    const data = await requestJson<any[]>('/notes', { method: 'GET' });
+    const data = await requestJson<any[]>(`${NOTES_PLUGIN_PREFIX}`, { method: 'GET' });
     const payload = Array.isArray(data) ? data : [];
     return payload.map(mapNoteSummary);
 }
@@ -758,7 +1018,7 @@ export async function createNote(payload: NoteDraftPayload): Promise<NoteSummary
         title: payload.title ?? null,
         body: payload.body ?? null
     };
-    const data = await requestJson('/notes', {
+    const data = await requestJson(`${NOTES_PLUGIN_PREFIX}`, {
         method: 'POST',
         body: JSON.stringify(body)
     });
@@ -766,7 +1026,7 @@ export async function createNote(payload: NoteDraftPayload): Promise<NoteSummary
 }
 
 export async function getNote(noteId: string): Promise<NoteContent> {
-    const data = await requestJson(`/notes/${encodeURIComponent(noteId)}`, { method: 'GET' });
+    const data = await requestJson(`${NOTES_PLUGIN_PREFIX}/${encodeURIComponent(noteId)}`, { method: 'GET' });
     return mapNoteContent(data);
 }
 
@@ -775,7 +1035,7 @@ export async function updateNote(noteId: string, payload: NoteDraftPayload): Pro
         title: payload.title ?? null,
         body: payload.body ?? null
     };
-    const data = await requestJson(`/notes/${encodeURIComponent(noteId)}`, {
+    const data = await requestJson(`${NOTES_PLUGIN_PREFIX}/${encodeURIComponent(noteId)}`, {
         method: 'PUT',
         body: JSON.stringify(body)
     });
@@ -783,7 +1043,7 @@ export async function updateNote(noteId: string, payload: NoteDraftPayload): Pro
 }
 
 export async function deleteNote(noteId: string): Promise<void> {
-    await requestJson(`/notes/${encodeURIComponent(noteId)}`, { method: 'DELETE' });
+    await requestJson(`${NOTES_PLUGIN_PREFIX}/${encodeURIComponent(noteId)}`, { method: 'DELETE' });
 }
 
 export async function ingestScreenshot(imageBytes: Uint8Array): Promise<ActivityLog> {
@@ -798,7 +1058,7 @@ export async function ingestScreenshot(imageBytes: Uint8Array): Promise<Activity
         headers['X-API-Key'] = key;
     }
 
-    const response = await fetch(`${API_BASE_URL}/activity/ingest`, {
+    const response = await fetch(`${API_BASE_URL}${ACTIVITY_PLUGIN_PREFIX}/ingest`, {
         method: 'POST',
         headers,
         body: formData
@@ -837,7 +1097,7 @@ export async function getActivityTimeline(start?: string, end?: string, summary:
         headers['X-API-Key'] = key;
     }
 
-    const response = await fetch(`${API_BASE_URL}/activity/timeline?${params.toString()}`, {
+    const response = await fetch(`${API_BASE_URL}${ACTIVITY_PLUGIN_PREFIX}/timeline?${params.toString()}`, {
         headers
     });
 
@@ -849,7 +1109,7 @@ export async function getActivityTimeline(start?: string, end?: string, summary:
 }
 
 export async function deleteActivityLog(logId: string): Promise<void> {
-    await requestJson(`/activity/${encodeURIComponent(logId)}`, { method: 'DELETE' });
+    await requestJson(`${ACTIVITY_PLUGIN_PREFIX}/${encodeURIComponent(logId)}`, { method: 'DELETE' });
 }
 
 export async function listChatSessions(limit = 100, offset = 0): Promise<ChatSession[]> {
@@ -903,4 +1163,260 @@ export async function addChatMessage(sessionId: string, message: Partial<Convers
         body: JSON.stringify(body)
     });
     return mapChatMessage(data);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Memory API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface MemoryEpisode {
+    id: string;
+    user_id: string;
+    summary: string;
+    episode?: string;
+    timestamp: string;
+    subject?: string;
+    metadata?: Record<string, unknown>;
+}
+
+export interface MemoryProfile {
+    user_id: string;
+    user_name?: string;
+    personality?: string[];
+    interests?: string[];
+    hard_skills?: Array<{ name: string; level: string }>;
+    soft_skills?: Array<{ name: string; level: string }>;
+}
+
+export interface MemoryForesight {
+    id: string;
+    user_id: string;
+    content: string;
+    evidence?: string;
+    parent_episode_id?: string;
+    metadata?: Record<string, unknown>;
+}
+
+export interface MemoryEventLog {
+    id: string;
+    user_id: string;
+    atomic_fact: string;
+    timestamp: string;
+    parent_episode_id?: string;
+    metadata?: Record<string, unknown>;
+}
+
+export interface MemorySummary {
+    user_id: string;
+    profile?: MemoryProfile;
+    episodes_count: number;
+    event_logs_count: number;
+    foresights_count: number;
+    recent_episodes: MemoryEpisode[];
+    recent_foresights: MemoryForesight[];
+}
+
+export async function getMemorySummary(userId: string): Promise<MemorySummary> {
+    const data = await requestJson<MemorySummary>(`/memory/${encodeURIComponent(userId)}`, { method: 'GET' });
+    return data;
+}
+
+export async function getMemoryEpisodes(userId: string, limit = 50, offset = 0): Promise<MemoryEpisode[]> {
+    const url = new URL(resolveEndpoint(`/memory/${encodeURIComponent(userId)}/episodes`));
+    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('offset', String(offset));
+    const data = await requestJson<MemoryEpisode[]>(url.toString(), { method: 'GET' });
+    return Array.isArray(data) ? data : [];
+}
+
+export async function getMemoryEventLogs(userId: string, limit = 100, offset = 0): Promise<MemoryEventLog[]> {
+    const url = new URL(resolveEndpoint(`/memory/${encodeURIComponent(userId)}/events`));
+    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('offset', String(offset));
+    const data = await requestJson<MemoryEventLog[]>(url.toString(), { method: 'GET' });
+    return Array.isArray(data) ? data : [];
+}
+
+export async function getMemoryForesights(userId: string, limit = 50): Promise<MemoryForesight[]> {
+    const url = new URL(resolveEndpoint(`/memory/${encodeURIComponent(userId)}/foresights`));
+    url.searchParams.set('limit', String(limit));
+    const data = await requestJson<MemoryForesight[]>(url.toString(), { method: 'GET' });
+    return Array.isArray(data) ? data : [];
+}
+
+// ========================================
+// Privacy APIs
+// ========================================
+
+export interface PrivacyLevel {
+    privacy_level: 'normal' | 'private';
+}
+
+export interface FilePrivacyResponse {
+    file_id: string;
+    privacy_level: 'normal' | 'private';
+    updated?: boolean;
+}
+
+export interface FolderPrivacyResponse {
+    folder_id: string;
+    privacy_level: 'normal' | 'private';
+    updated?: boolean;
+    files_updated?: number;
+    files_normal?: number;
+    files_private?: number;
+}
+
+/**
+ * Update the privacy level of a file.
+ * Only callable from local UI - external requests will be rejected.
+ */
+export async function setFilePrivacy(fileId: string, privacyLevel: 'normal' | 'private'): Promise<FilePrivacyResponse> {
+    const data = await requestJson<any>(`/files/${encodeURIComponent(fileId)}/privacy`, {
+        method: 'PUT',
+        body: JSON.stringify({ privacy_level: privacyLevel }),
+        headers: {
+            'X-Request-Source': 'local_ui'  // Mark as local UI request for privacy access
+        }
+    });
+    return {
+        file_id: data.file_id,
+        privacy_level: data.privacy_level,
+        updated: data.updated
+    };
+}
+
+/**
+ * Get the privacy level of a file.
+ */
+export async function getFilePrivacy(fileId: string): Promise<FilePrivacyResponse> {
+    const data = await requestJson<any>(`/files/${encodeURIComponent(fileId)}/privacy`, {
+        method: 'GET',
+        headers: {
+            'X-Request-Source': 'local_ui'
+        }
+    });
+    return {
+        file_id: data.file_id,
+        privacy_level: data.privacy_level
+    };
+}
+
+/**
+ * Update the privacy level of a folder and optionally all its files.
+ * Only callable from local UI - external requests will be rejected.
+ */
+export async function setFolderPrivacy(
+    folderId: string, 
+    privacyLevel: 'normal' | 'private', 
+    applyToFiles: boolean = true
+): Promise<FolderPrivacyResponse> {
+    const data = await requestJson<any>(`/folders/${encodeURIComponent(folderId)}/privacy`, {
+        method: 'PUT',
+        body: JSON.stringify({ 
+            privacy_level: privacyLevel,
+            apply_to_files: applyToFiles
+        }),
+        headers: {
+            'X-Request-Source': 'local_ui'
+        }
+    });
+    return {
+        folder_id: data.folder_id,
+        privacy_level: data.privacy_level,
+        updated: data.updated,
+        files_updated: data.files_updated
+    };
+}
+
+/**
+ * Get the privacy level of a folder and file counts.
+ */
+export async function getFolderPrivacy(folderId: string): Promise<FolderPrivacyResponse> {
+    const data = await requestJson<any>(`/folders/${encodeURIComponent(folderId)}/privacy`, {
+        method: 'GET',
+        headers: {
+            'X-Request-Source': 'local_ui'
+        }
+    });
+    return {
+        folder_id: data.folder_id,
+        privacy_level: data.privacy_level,
+        files_normal: data.files_normal,
+        files_private: data.files_private
+    };
+}
+
+// ========================================
+// API Key Management
+// ========================================
+
+export interface ApiKeyRecord {
+    key: string;
+    name: string;
+    created_at: string;
+    last_used_at: string | null;
+    is_active: boolean;
+    is_system: boolean;
+}
+
+/**
+ * List all API keys.
+ */
+export async function listApiKeys(): Promise<ApiKeyRecord[]> {
+    return requestJson<ApiKeyRecord[]>('/security/keys');
+}
+
+/**
+ * Create a new API key.
+ */
+export async function createApiKey(name: string): Promise<ApiKeyRecord> {
+    return requestJson<ApiKeyRecord>(`/security/keys?name=${encodeURIComponent(name)}`, {
+        method: 'POST'
+    });
+}
+
+/**
+ * Delete an API key.
+ */
+export async function deleteApiKey(key: string): Promise<{ status: string }> {
+    return requestJson<{ status: string }>(`/security/keys/${encodeURIComponent(key)}`, {
+        method: 'DELETE'
+    });
+}
+
+/**
+ * Enable or disable an API key.
+ * Disabled keys will receive 403 Forbidden on all requests.
+ */
+export async function setApiKeyActive(key: string, isActive: boolean): Promise<{ status: string; key: string }> {
+    return requestJson<{ status: string; key: string }>(`/security/keys/${encodeURIComponent(key)}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: isActive })
+    });
+}
+
+/**
+ * Rename an API key.
+ */
+export async function renameApiKey(key: string, newName: string): Promise<{ status: string; key: string; name: string }> {
+    return requestJson<{ status: string; key: string; name: string }>(`/security/keys/${encodeURIComponent(key)}/name`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+    });
+}
+
+/**
+ * Get or create an API key by name. If a key with the given name exists, return it.
+ * Otherwise, create a new one.
+ */
+export async function getOrCreateApiKey(name: string): Promise<ApiKeyRecord> {
+    const keys = await listApiKeys();
+    const existing = keys.find(k => k.name === name && k.is_active && !k.is_system);
+    if (existing) {
+        return existing;
+    }
+    return createApiKey(name);
 }

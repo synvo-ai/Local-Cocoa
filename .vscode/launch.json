@@ -1,71 +1,60 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "debug npm:dev:backend",
-            "runtimeExecutable": "npm",
-            "runtimeArgs": [
-                "run",
-                "dev:backend"
-            ],
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "Debug Backend (Python)",
-            "type": "node",
-            "request": "launch",
-            "cwd": "${workspaceFolder}",
-            "args": [
-                "scripts/launch-backend.js",
-                "dev",
-            ],
-            "console": "integratedTerminal",
-        },
-        {
-            "name": "Debug Python RAG Agent",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "uvicorn",
-            "args": [
-                "services.local_rag_agent.app:app",
-                "--host", "127.0.0.1",
-                "--port", "52532"
-            ],
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "justMyCode": false,
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            }
-        },
-        {
-            "name": "Debug Electron Main",
-            "type": "node",
-            "request": "launch",
-            "cwd": "${workspaceFolder}",
-            "runtimeExecutable": "npm",
-            "runtimeArgs": [
-                "run",
-                "dev:electron"
-            ],
-            "console": "integratedTerminal",
-            "autoAttachChildProcesses": true,
-            "preLaunchTask": "npm: dev:renderer",
-            "skipFiles": [
-                "<node_internals>/**"
-            ]
-        }
-    ],
-    "compounds": [
-        {
-            "name": "Debug All",
-            "configurations": [
-                "Debug Backend (Python)",
-                "Debug Electron Main"
-            ]
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+      {
+          "type": "node",
+          "request": "launch",
+          "name": "debug npm:dev:backend",
+          "runtimeExecutable": "npm",
+          "runtimeArgs": [
+              "run",
+              "dev:backend"
+          ],
+          "cwd": "${workspaceFolder}",
+          "console": "integratedTerminal"
+      },
+      {
+          "name": "Debug Python RAG Agent",
+          "type": "debugpy",
+          "request": "launch",
+          "module": "uvicorn",
+          "args": [
+              "services.local_rag_agent.app:app",
+              "--host", "127.0.0.1",
+              "--port", "52532"
+          ],
+          "cwd": "${workspaceFolder}",
+          "console": "integratedTerminal",
+          "justMyCode": false,
+          "env": {
+              "PYTHONPATH": "${workspaceFolder}"
+          }
+      },
+      {
+          "name": "Debug Electron Main",
+          "type": "node",
+          "request": "launch",
+          "cwd": "${workspaceFolder}",
+          "runtimeExecutable": "npm",
+          "runtimeArgs": [
+              "run",
+              "dev:electron"
+          ],
+          "console": "integratedTerminal",
+          "autoAttachChildProcesses": true,
+          "preLaunchTask": "npm: dev:renderer",
+          "skipFiles": [
+              "<node_internals>/**"
+          ]
+      }
+  ],
+  "compounds": [
+      {
+          "name": "Debug All",
+          "configurations": [
+              "Debug Backend (Python)",
+              "Debug Electron Main"
+          ]
+      }
+  ]
 }

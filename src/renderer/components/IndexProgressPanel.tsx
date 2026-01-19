@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Activity, FileText, Image as ImageIcon, Video, Music, X, Pause, Play, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Activity, FileText, Image as ImageIcon, Video, Music, X, Pause, Play, ChevronDown, ChevronUp, Search, Brain, Eye, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { IndexProgressUpdate, IndexingItem } from '../types';
+import type { StagedIndexProgress } from '../../electron/backendClient';
 
 function basename(pathValue: string): string {
     const parts = (pathValue ?? '').split(/[/\\]/).filter(Boolean);
@@ -33,10 +34,63 @@ function extractPageLabel(text?: string | null): string | null {
     return match ? match[1] : null;
 }
 
+// Stage badge component
+function StageBadge({ 
+    stage, 
+    isActive 
+}: { 
+    stage: 'keyword' | 'semantic' | 'vision';
+    isActive: boolean;
+}) {
+    const config = {
+        keyword: { 
+            icon: Search, 
+            label: 'Keyword', 
+            color: 'text-emerald-500', 
+            bg: 'bg-emerald-500/10', 
+            border: 'border-emerald-500/30' 
+        },
+        semantic: { 
+            icon: Brain, 
+            label: 'Semantic', 
+            color: 'text-blue-500', 
+            bg: 'bg-blue-500/10', 
+            border: 'border-blue-500/30' 
+        },
+        vision: { 
+            icon: Eye, 
+            label: 'Vision', 
+            color: 'text-purple-500', 
+            bg: 'bg-purple-500/10', 
+            border: 'border-purple-500/30' 
+        },
+    }[stage];
+
+    const Icon = config.icon;
+
+    return (
+        <div className={cn(
+            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium",
+            config.bg,
+            config.border,
+            config.color,
+            isActive && "animate-pulse"
+        )}>
+            {isActive ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+                <Icon className="h-3 w-3" />
+            )}
+            <span>{config.label}</span>
+        </div>
+    );
+}
+
 export function IndexProgressPanel({
     isIndexing,
     progress,
     indexingItems,
+    stageProgress,
     onRemoveItem,
     onPauseIndexing,
     onResumeIndexing,
@@ -44,6 +98,7 @@ export function IndexProgressPanel({
     isIndexing: boolean;
     progress: IndexProgressUpdate | null;
     indexingItems: IndexingItem[];
+    stageProgress?: StagedIndexProgress | null;
     onRemoveItem?: (filePath: string) => void;
     onPauseIndexing?: () => void;
     onResumeIndexing?: () => void;
@@ -52,6 +107,45 @@ export function IndexProgressPanel({
     const processing = indexingItems.find((item) => item.status === 'processing') ?? null;
     const pendingCount = indexingItems.filter((item) => item.status === 'pending').length;
     const queueItems = indexingItems.slice(0, 50);
+
+    // Determine current active stage from stageProgress
+    const activeStage = useMemo(() => {
+        if (!stageProgress || stageProgress.total === 0) return null;
+        
+        const textPercent = clampPercent(stageProgress.fast_text.percent);
+        const embedPercent = clampPercent(stageProgress.fast_embed.percent);
+        const deepPercent = clampPercent(stageProgress.deep.percent);
+        
+        // Check which stage is actively running
+        if (textPercent < 100) return 'keyword';
+        if (stageProgress.semantic_enabled && embedPercent < 100) return 'semantic';
+        if (stageProgress.deep_enabled && deepPercent < 100) return 'vision';
+        return null;
+    }, [stageProgress]);
+
+    // Get stage-specific progress info
+    const stageInfo = useMemo(() => {
+        if (!stageProgress || !activeStage) return null;
+        
+        const stages = {
+            keyword: {
+                done: stageProgress.fast_text.done,
+                total: stageProgress.total,
+                percent: clampPercent(stageProgress.fast_text.percent),
+            },
+            semantic: {
+                done: stageProgress.fast_embed.done,
+                total: stageProgress.total,
+                percent: clampPercent(stageProgress.fast_embed.percent),
+            },
+            vision: {
+                done: stageProgress.deep.done,
+                total: stageProgress.total,
+                percent: clampPercent(stageProgress.deep.percent),
+            },
+        };
+        return stages[activeStage];
+    }, [stageProgress, activeStage]);
 
     const headerMessage =
         progress?.status === 'running'
@@ -75,13 +169,26 @@ export function IndexProgressPanel({
     return (
         <div className="space-y-4">
             <div className="rounded-lg border bg-card p-4 text-card-foreground shadow-sm space-y-4">
+                {/* Header with stage indicator */}
                 <div className="flex flex-wrap items-center justify-between gap-3 overflow-hidden">
                     <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
-                        <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center shrink-0">
-                            <Activity className="h-5 w-5 text-primary" />
+                        <div className={cn(
+                            "h-10 w-10 rounded flex items-center justify-center shrink-0",
+                            activeStage ? "bg-primary/10" : "bg-muted"
+                        )}>
+                            {activeStage ? (
+                                <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                            ) : (
+                                <Activity className="h-5 w-5 text-muted-foreground" />
+                            )}
                         </div>
                         <div className="min-w-0 flex-1 overflow-hidden">
-                            <p className="text-base font-semibold">Index Progress</p>
+                            <div className="flex items-center gap-2">
+                                <p className="text-base font-semibold">Index Progress</p>
+                                {activeStage && (
+                                    <StageBadge stage={activeStage} isActive={true} />
+                                )}
+                            </div>
                             <p className="text-xs text-muted-foreground truncate" title={headerMessage}>{headerMessage}</p>
                         </div>
                     </div>
@@ -120,6 +227,64 @@ export function IndexProgressPanel({
                         )}
                     </div>
                 </div>
+
+                {/* Stage-level progress bar (when no file-level processing shown) */}
+                {!processing && activeStage && stageInfo && (
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                            <span className={cn(
+                                "font-medium",
+                                activeStage === 'keyword' && "text-emerald-600",
+                                activeStage === 'semantic' && "text-blue-600",
+                                activeStage === 'vision' && "text-purple-600"
+                            )}>
+                                {activeStage === 'keyword' && "Extracting text for keyword search..."}
+                                {activeStage === 'semantic' && "Generating embeddings for semantic search..."}
+                                {activeStage === 'vision' && "Analyzing with vision model..."}
+                            </span>
+                            <span className="text-muted-foreground tabular-nums">
+                                {stageInfo.done}/{stageInfo.total} files
+                            </span>
+                        </div>
+                        <div className={cn(
+                            "h-2 w-full rounded-full overflow-hidden",
+                            activeStage === 'keyword' && "bg-emerald-500/10",
+                            activeStage === 'semantic' && "bg-blue-500/10",
+                            activeStage === 'vision' && "bg-purple-500/10"
+                        )}>
+                            <div
+                                className={cn(
+                                    "h-full rounded-full transition-all duration-300",
+                                    activeStage === 'keyword' && "bg-emerald-500",
+                                    activeStage === 'semantic' && "bg-blue-500",
+                                    activeStage === 'vision' && "bg-purple-500"
+                                )}
+                                style={{ 
+                                    width: `${stageInfo.percent}%`,
+                                    animation: stageInfo.percent < 100 ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none'
+                                }}
+                            />
+                        </div>
+                        {/* Activity indicator */}
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <span className="relative flex h-2 w-2">
+                                <span className={cn(
+                                    "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
+                                    activeStage === 'keyword' && "bg-emerald-400",
+                                    activeStage === 'semantic' && "bg-blue-400",
+                                    activeStage === 'vision' && "bg-purple-400"
+                                )} />
+                                <span className={cn(
+                                    "relative inline-flex rounded-full h-2 w-2",
+                                    activeStage === 'keyword' && "bg-emerald-500",
+                                    activeStage === 'semantic' && "bg-blue-500",
+                                    activeStage === 'vision' && "bg-purple-500"
+                                )} />
+                            </span>
+                            <span>Processing files...</span>
+                        </div>
+                    </div>
+                )}
 
                 {processing ? (
                     <div className="space-y-3">

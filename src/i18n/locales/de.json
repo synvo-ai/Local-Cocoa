@@ -1,0 +1,143 @@
+{
+  "app": {
+    "name": "Local Cocoa",
+    "tagline": "Ihr privater KI-Arbeitsbereich"
+  },
+  "common": {
+    "search": "Suchen",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "close": "Schließen",
+    "loading": "Wird geladen...",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "confirm": "Bestätigen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "finish": "Fertig",
+    "settings": "Einstellungen",
+    "language": "Sprache"
+  },
+  "startup": {
+    "connecting": "Verbindung zu Diensten wird hergestellt...",
+    "startingBackend": "Backend-Dienste werden gestartet...",
+    "modelsReady": "Modelle bereit",
+    "welcome": "Willkommen bei Local Cocoa"
+  },
+  "onboarding": {
+    "welcome": "Willkommen!",
+    "welcomeDescription": "Ihr privater KI-Arbeitsbereich, der vollständig auf Ihrem Gerät läuft. Ihre Daten verlassen niemals Ihr Gerät.",
+    "private": "100% Privat",
+    "runsLocally": "Lokale Ausführung",
+    "allYourFiles": "Alle Ihre Dateien",
+    "aiPowered": "KI-gestützt",
+    "downloadModels": "KI-Modelle herunterladen",
+    "downloadDescription": "Lehnen Sie sich zurück, während wir die KI-Modelle herunterladen. Dies geschieht nur einmal.",
+    "allSet": "Alles bereit!",
+    "allSetDescription": "Alle KI-Modelle sind bereit. Sie können Local Cocoa jetzt in vollem Umfang nutzen."
+  },
+  "chat": {
+    "title": "Fragen Sie Ihren Arbeitsbereich",
+    "placeholder": "Geben Sie Ihre Nachricht ein...",
+    "howCanIHelp": "Wie kann ich Ihnen heute helfen?",
+    "helpDescription": "Ich kann Ihnen helfen, Ihre Arbeitsbereichsdokumente zu durchsuchen, zu analysieren und zusammenzufassen.",
+    "newConversation": "Neue Unterhaltung",
+    "resetConversation": "Unterhaltung zurücksetzen"
+  },
+  "knowledge": {
+    "title": "Wissensbasis",
+    "folders": "Ordner",
+    "files": "Dateien",
+    "addFolder": "Ordner hinzufügen",
+    "addFile": "Datei hinzufügen",
+    "removeFolder": "Ordner entfernen",
+    "rescanFolder": "Neu scannen",
+    "reindexFolder": "Neu indizieren",
+    "indexed": "indiziert",
+    "pending": "ausstehend"
+  },
+  "search": {
+    "searching": "Suche läuft...",
+    "searchComplete": "Suche abgeschlossen",
+    "noResults": "Keine Ergebnisse gefunden",
+    "stages": {
+      "filename": "Dateinamen werden durchsucht...",
+      "summary": "Zusammenfassungen werden durchsucht...",
+      "metadata": "Metadaten werden durchsucht...",
+      "hybrid": "Tiefe semantische Suche...",
+      "complete": "Suche abgeschlossen"
+    }
+  },
+  "indexing": {
+    "indexing": "Indizierung...",
+    "paused": "Pausiert",
+    "starting": "Wird gestartet...",
+    "scanning": "Wird gescannt...",
+    "processing": "Wird verarbeitet...",
+    "fastMode": "Schnellmodus",
+    "deepMode": "Tiefenmodus",
+    "pause": "Pause",
+    "resume": "Fortsetzen",
+    "stop": "Stoppen"
+  },
+  "models": {
+    "title": "Modellverwaltung",
+    "activeModel": "Aktives Modell",
+    "availableModels": "Verfügbare Modelle",
+    "downloadModel": "Modell herunterladen",
+    "modelSettings": "Modelleinstellungen",
+    "contextSize": "Kontextgröße",
+    "visionPerformance": "Vision-Leistung",
+    "maxResolution": "Maximale Auflösung"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "subtitle": "Anwendungseinstellungen verwalten",
+    "general": "Allgemein",
+    "models": "Modelle",
+    "retrievalIndexing": "Abruf und Indizierung",
+    "security": "Sicherheit",
+    "scanScope": "Scan-Bereich",
+    "plugins": "Plugins",
+    "language": "Sprache",
+    "languageDescription": "Wählen Sie Ihre bevorzugte Sprache",
+    "theme": "Thema",
+    "appearance": "Aussehen",
+    "skin": "Skin",
+    "skinDescription": "Wählen Sie einen visuellen Stil für die Benutzeroberfläche",
+    "systemHealth": "Systemzustand",
+    "light": "Hell",
+    "dark": "Dunkel",
+    "system": "System",
+    "diagnostics": "Diagnose und Support"
+  },
+  "notifications": {
+    "contextTooLarge": "Diese Anfrage ist für das Kontextfenster des Modells zu groß. Versuchen Sie, die Vision-Leistung (maximale Auflösung) zu senken oder die Kontextgröße in den Modellen zu erhöhen.",
+    "folderAdded": "Ordner erfolgreich hinzugefügt",
+    "folderRemoved": "Ordner erfolgreich entfernt",
+    "indexingStarted": "Indizierung gestartet",
+    "indexingComplete": "Indizierung abgeschlossen",
+    "errorOccurred": "Ein Fehler ist aufgetreten"
+  },
+  "extensions": {
+    "title": "Erweiterungen",
+    "plugins": "Plugins",
+    "email": "E-Mail",
+    "notes": "Notizen",
+    "activity": "Aktivität"
+  },
+  "scan": {
+    "title": "Schneller Scan",
+    "description": "Dateien nach Änderungsdatum scannen"
+  },
+  "mbti": {
+    "title": "MBTI-Analyse",
+    "startAnalysis": "Analyse starten",
+    "stopAnalysis": "Analyse stoppen",
+    "analyzing": "Analysiere...",
+    "generatingReport": "Bericht wird erstellt..."
+  }
+}
+

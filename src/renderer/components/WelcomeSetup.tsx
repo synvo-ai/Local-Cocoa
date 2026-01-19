@@ -121,7 +121,7 @@ export function WelcomeSetup({ onComplete }: WelcomeSetupProps) {
                 <div className="absolute top-0 right-0 w-32 h-32 opacity-10">
                     <img src={mascot} alt="" className="w-full h-full object-contain" />
                 </div>
-                
+
                 <div className="relative z-10 flex items-start gap-5">
                     <div className="shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg flex items-center justify-center">
                         <Coffee className="h-8 w-8 text-white" />
@@ -146,10 +146,10 @@ export function WelcomeSetup({ onComplete }: WelcomeSetupProps) {
                         <div key={step} className="flex items-center">
                             <div className={cn(
                                 "h-2 rounded-full transition-all duration-500",
-                                step === currentStep ? "w-8 bg-amber-500" : 
-                                ['welcome', 'downloading', 'complete'].indexOf(currentStep) > idx 
-                                    ? "w-2 bg-amber-400" 
-                                    : "w-2 bg-amber-200 dark:bg-amber-800"
+                                step === currentStep ? "w-8 bg-amber-500" :
+                                    ['welcome', 'downloading', 'complete'].indexOf(currentStep) > idx
+                                        ? "w-2 bg-amber-400"
+                                        : "w-2 bg-amber-200 dark:bg-amber-800"
                             )} />
                             {idx < 2 && <div className="w-2" />}
                         </div>
@@ -169,7 +169,7 @@ export function WelcomeSetup({ onComplete }: WelcomeSetupProps) {
                             </h3>
                             <div className="grid gap-3">
                                 {modelGroups.map((group, idx) => (
-                                    <div 
+                                    <div
                                         key={group.id}
                                         className={cn(
                                             "flex items-center gap-4 p-4 rounded-xl border bg-card/50 transition-all duration-300",
@@ -180,8 +180,8 @@ export function WelcomeSetup({ onComplete }: WelcomeSetupProps) {
                                     >
                                         <div className={cn(
                                             "shrink-0 w-10 h-10 rounded-lg flex items-center justify-center",
-                                            group.ready 
-                                                ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" 
+                                            group.ready
+                                                ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
                                                 : "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
                                         )}>
                                             {group.ready ? <CheckCircle2 className="h-5 w-5" /> : group.icon}
@@ -192,7 +192,7 @@ export function WelcomeSetup({ onComplete }: WelcomeSetupProps) {
                                         </div>
                                         <div className={cn(
                                             "shrink-0 text-xs font-medium px-2 py-1 rounded-full",
-                                            group.ready 
+                                            group.ready
                                                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                                                 : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                                         )}>
@@ -243,18 +243,18 @@ export function WelcomeSetup({ onComplete }: WelcomeSetupProps) {
                             {modelGroups.map((group) => {
                                 const isCurrentGroup = modelDownloadEvent?.assetId?.includes(group.id);
                                 return (
-                                    <div 
+                                    <div
                                         key={group.id}
                                         className={cn(
                                             "flex items-center gap-4 p-4 rounded-xl border transition-all",
-                                            isCurrentGroup 
-                                                ? "bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800" 
+                                            isCurrentGroup
+                                                ? "bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800"
                                                 : "bg-card/50"
                                         )}
                                     >
                                         <div className={cn(
                                             "shrink-0 w-10 h-10 rounded-lg flex items-center justify-center",
-                                            group.ready 
+                                            group.ready
                                                 ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
                                                 : isCurrentGroup
                                                     ? "bg-amber-200 dark:bg-amber-800"
@@ -327,11 +327,11 @@ export function WelcomeSetup({ onComplete }: WelcomeSetupProps) {
                         <ChevronRight className="h-5 w-5 ml-1" />
                     </button>
                 )}
-                
+
                 {currentStep === 'downloading' && (
                     <div className="text-center">
                         <p className="text-sm text-muted-foreground">
-                            Please don't close the app while downloading...
+                            Please don&apos;t close the app while downloading...
                         </p>
                     </div>
                 )}

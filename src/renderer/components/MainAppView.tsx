@@ -4,17 +4,17 @@ import { Sidebar } from './layout/Sidebar';
 import { RightPanel } from './layout/RightPanel';
 import { ChatArea } from './chat/ChatArea';
 import { KnowledgeBase } from './KnowledgeBase';
-import { ScanWorkspace } from './ScanWorkspace';
-import { ActivityTimeline } from './ActivityTimeline';
+import { ExtensionsView } from './ExtensionsView';
 import { ModelManagerModal } from './modals/ModelManagerModal';
-import { ModelManagement } from './ModelManagement';
 import { SettingsPanel } from './SettingsPanel';
 import { OnboardingGuide } from './onboarding/OnboardingGuide';
 import { StartupLoading } from './StartupLoading';
+import { MbtiAnalysis } from './MbtiAnalysis';
+import { UserMemory } from './UserMemory';
 import { useWorkspaceData } from '../hooks/useWorkspaceData';
 import { useChatSession } from '../hooks/useChatSession';
-import { useNotesData } from '../hooks/useNotesData';
 import { useModelStatus } from '../hooks/useModelStatus';
+import { useMbtiAnalysis } from '../hooks/useMbtiAnalysis';
 import type {
     IndexedFile,
     SearchHit
@@ -34,7 +34,7 @@ function isActivitySummariesPath(pathValue: string | null | undefined): boolean 
 }
 
 export function MainAppView() {
-    const [activeView, setActiveView] = useState<'chat' | 'knowledge' | 'models' | 'settings' | 'activity' | 'scan'>('chat');
+    const [activeView, setActiveView] = useState<'chat' | 'knowledge' | 'models' | 'settings' | 'extensions' | 'scan' | 'mbti' | 'memory'>('chat');
     const [isModelModalOpen, setIsModelModalOpen] = useState(false);
     const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => {
         return !localStorage.getItem(ONBOARDING_KEY);
@@ -42,7 +42,6 @@ export function MainAppView() {
     const [selectedFile, setSelectedFile] = useState<IndexedFile | null>(null);
     const [selectedHit, setSelectedHit] = useState<SearchHit | null>(null);
     const [indexDrawerOpen, setIndexDrawerOpen] = useState(false);
-    const [isTrackingActivity, setIsTrackingActivity] = useState(false);
     const [notification, setNotification] = useState<{ message: string; action?: { label: string; onClick: () => void } } | null>(null);
 
     const [rightPanelTabRequest, setRightPanelTabRequest] = useState<{ tab: 'preview' | 'progress'; nonce: number } | null>(null);
@@ -80,15 +79,17 @@ export function MainAppView() {
         files,
         indexingItems,
         isIndexing,
-        noteIndexingItems,
-        noteFolderId,
         snapshot,
         fileMap,
         refreshData,
         health,
         progress,
-        systemSpecs,
-        backendStarting
+        stageProgress,
+        backendStarting,
+        startSemanticIndexing,
+        stopSemanticIndexing,
+        startDeepIndexing,
+        stopDeepIndexing
     } = useWorkspaceData();
 
     const previousIsIndexingRef = useRef<boolean>(false);
@@ -111,7 +112,7 @@ export function MainAppView() {
             setNotification({ message: detail.message, action: detail.action });
         };
         const navigateHandler = (event: Event) => {
-            const detail = (event as CustomEvent).detail as { view?: 'chat' | 'knowledge' | 'models' | 'settings' | 'activity' | 'scan' } | undefined;
+            const detail = (event as CustomEvent).detail as { view?: 'chat' | 'knowledge' | 'models' | 'settings' | 'extensions' | 'scan' | 'mbti' } | undefined;
             if (!detail?.view) return;
             setActiveView(detail.view);
         };
@@ -171,11 +172,9 @@ export function MainAppView() {
                     if (folder?.id) addedFolderIds.push(folder.id);
                 }
 
-                // Auto-start indexing after adding folders (uses configured default indexing mode).
-                if (addedFolderIds.length > 0 && api.runIndex) {
-                    await api.runIndex({
-                        mode: 'rescan',
-                        scope: 'folder',
+                // Auto-start indexing after adding folders using fast staged indexing
+                if (addedFolderIds.length > 0 && api.runStagedIndex) {
+                    await api.runStagedIndex({
                         folders: addedFolderIds,
                     });
                 }
@@ -189,7 +188,7 @@ export function MainAppView() {
     // Add individual files - uses 'manual' scan mode to prevent full folder scans and avoid lag
     const handleAddFile = useCallback(async () => {
         const api = window.api;
-        if (!api?.pickFiles || !api?.addFolder || !api?.runIndex) return;
+        if (!api?.pickFiles || !api?.addFolder || !api?.runStagedIndex) return;
         try {
             const filePaths = await api.pickFiles();
             if (!filePaths || filePaths.length === 0) return;
@@ -204,7 +203,7 @@ export function MainAppView() {
             }
 
             // Register each parent directory with 'manual' scan mode (won't trigger full folder scan)
-            // Then index only the selected files
+            // Then index only the selected files using fast staged indexing
             for (const [parentDir, files] of filesByParent) {
                 // Add folder with 'manual' mode - this prevents automatic folder scanning
                 try {
@@ -213,10 +212,8 @@ export function MainAppView() {
                     // Folder might already exist, that's fine
                 }
 
-                // Index only the specific files (not the entire folder)
-                await api.runIndex({
-                    mode: 'rescan',
-                    scope: 'folder',
+                // Index only the specific files using fast staged indexing
+                await api.runStagedIndex({
                     folders: [parentDir],
                     files: files,
                 });
@@ -239,11 +236,18 @@ export function MainAppView() {
         }
     }, [refreshData]);
 
-    const handleRescanFolder = useCallback(async (id: string, mode?: 'fast' | 'fine') => {
+    const handleRescanFolder = useCallback(async (id: string, mode?: 'fast' | 'deep') => {
         const api = window.api;
-        if (!api?.runIndex) return;
+        if (!api?.runIndex || !api?.runStagedIndex) return;
         try {
-            await api.runIndex({ mode: 'rescan', scope: 'folder', folders: [id], indexing_mode: mode });
+            // Use different API based on mode:
+            // - Fast (default): Use staged indexing (fast text extraction, no VLM)
+            // - Deep: Use legacy indexing with VLM processing
+            if (!mode || mode === 'fast') {
+                await api.runStagedIndex({ folders: [id] });
+            } else {
+                await api.runIndex({ mode: 'rescan', scope: 'folder', folders: [id], indexing_mode: 'deep' });
+            }
             // Fast scans can complete before the polling loop observes "running".
             // Force a refresh so the UI updates last-indexed / failed files immediately.
             await refreshData();
@@ -253,11 +257,18 @@ export function MainAppView() {
         }
     }, [refreshData]);
 
-    const handleReindexFolder = useCallback(async (id: string, mode?: 'fast' | 'fine') => {
+    const handleReindexFolder = useCallback(async (id: string, mode?: 'fast' | 'deep') => {
         const api = window.api;
-        if (!api?.runIndex) return;
+        if (!api?.runIndex || !api?.runStagedIndex) return;
         try {
-            await api.runIndex({ mode: 'reindex', scope: 'folder', folders: [id], indexing_mode: mode });
+            // Use different API based on mode:
+            // - Fast (default): Use staged indexing (fast text extraction, no VLM)
+            // - Deep: Use legacy indexing with VLM processing
+            if (!mode || mode === 'fast') {
+                await api.runStagedIndex({ folders: [id], mode: 'reindex' });
+            } else {
+                await api.runIndex({ mode: 'reindex', scope: 'folder', folders: [id], indexing_mode: 'deep' });
+            }
             await refreshData();
         } catch (error) {
             console.error('Failed to reindex folder', error);
@@ -275,46 +286,15 @@ export function MainAppView() {
         handleDeleteSession,
         handleSelectSession,
         handleResetConversation,
-        handleSend
+        handleSend,
+        handleResume
     } = useChatSession();
 
-    const {
-        notes,
-        selectedNoteId,
-        selectedNote,
-        isNoteLoading,
-        isNoteSaving,
-        handleSelectNote,
-        handleCreateNote,
-        handleSaveNote,
-        handleDeleteNote
-    } = useNotesData();
-
-    const handleRescanNotesIndex = useCallback(async () => {
-        if (!noteFolderId) return;
-        const api = window.api;
-        if (!api?.runIndex) return;
-        try {
-            await api.runIndex({ mode: 'rescan', scope: 'folder', folders: [noteFolderId] });
-            await refreshData();
-        } catch (error) {
-            console.error('Failed to rescan notes index', error);
-            setNotification({ message: error instanceof Error ? error.message : 'Failed to rescan notes index.' });
+    const handleResumeSearch = useCallback(async (mode?: any) => {
+        if (currentSessionId && handleResume) {
+            await handleResume(currentSessionId, mode);
         }
-    }, [noteFolderId, refreshData]);
-
-    const handleReindexNotesIndex = useCallback(async () => {
-        if (!noteFolderId) return;
-        const api = window.api;
-        if (!api?.runIndex) return;
-        try {
-            await api.runIndex({ mode: 'reindex', scope: 'folder', folders: [noteFolderId] });
-            await refreshData();
-        } catch (error) {
-            console.error('Failed to reindex notes index', error);
-            setNotification({ message: error instanceof Error ? error.message : 'Failed to reindex notes index.' });
-        }
-    }, [noteFolderId, refreshData]);
+    }, [currentSessionId, handleResume]);
 
     const {
         modelsReady,
@@ -329,59 +309,8 @@ export function MainAppView() {
     // Derived state
     const visibleFolders = useMemo(() => folders.filter((folder) => !isConnectorPath(folder.path) && !isActivitySummariesPath(folder.path)), [folders]);
     const visibleFiles = useMemo(() => files.filter((file) => !isConnectorPath(file.fullPath || file.path) && !isActivitySummariesPath(file.fullPath || file.path)), [files]);
-    const activitySummaryFiles = useMemo(() => files.filter((file) => isActivitySummariesPath(file.fullPath || file.path)), [files]);
     const selectedModel = activeModelId || LOCAL_MODEL_LABEL;
     const currentSession = sessions.find(s => s.id === currentSessionId);
-
-    // Effects
-    useEffect(() => {
-        if (!isTrackingActivity) return;
-
-        const intervalId = window.setInterval(async () => {
-            try {
-                const api = window.api;
-                if (!api?.captureScreen || !api?.ingestScreenshot) return;
-
-                const image = await api.captureScreen();
-                if (image) {
-                    await api.ingestScreenshot(image);
-                }
-            } catch (error) {
-                console.error('Activity tracking error:', error);
-                setIsTrackingActivity(false);
-
-                if (isContextTooLargeError(error)) {
-                    showContextTooLargeWarning();
-                    return;
-                }
-
-                const platform = systemSpecs?.platform;
-                const settingsUrl = platform === 'darwin'
-                    ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
-                    : platform === 'win32'
-                        ? 'ms-settings:privacy'
-                        : null;
-
-                setNotification({
-                    message: 'Screen capture failed. Please check permissions.',
-                    action: {
-                        label: 'Open Settings',
-                        onClick: () => {
-                            if (settingsUrl) {
-                                void openExternalSafe(settingsUrl);
-                                return;
-                            }
-                            setActiveView('settings');
-                        }
-                    }
-                });
-            }
-        }, 30000); // 30 seconds
-
-        return () => {
-            window.clearInterval(intervalId);
-        };
-    }, [isTrackingActivity, openExternalSafe, systemSpecs?.platform]);
 
     // Handlers
     const handleOpenFile = useCallback(async (file: IndexedFile) => {
@@ -516,7 +445,7 @@ export function MainAppView() {
         return stats;
     }, [files, folders, indexingItems]);
 
-    const handleViewSelect = (view: 'chat' | 'knowledge' | 'models' | 'settings' | 'activity' | 'scan') => {
+    const handleViewSelect = (view: 'chat' | 'knowledge' | 'models' | 'settings' | 'extensions' | 'scan' | 'mbti' | 'memory') => {
         setActiveView(view);
     };
 
@@ -572,10 +501,10 @@ export function MainAppView() {
 
     if (!isBackendReady && !modelsReady) {
         // Determine appropriate status message
-        const statusMessage = backendStarting 
-            ? 'Starting backend services...' 
+        const statusMessage = backendStarting
+            ? 'Starting backend services...'
             : (health?.message || 'Connecting to services...');
-        
+
         return (
             <>
                 <StartupLoading
@@ -626,6 +555,7 @@ export function MainAppView() {
                         isIndexing={isIndexing}
                         indexProgress={progress}
                         indexingItems={filteredIndexingItems}
+                        stageProgress={stageProgress}
                         onCloseIndexing={() => setIndexDrawerOpen(false)}
                         tabRequest={rightPanelTabRequest}
                         onRemoveFromQueue={handleRemoveFromQueue}
@@ -674,6 +604,7 @@ export function MainAppView() {
                     currentSessionId={currentSessionId}
                     title={currentSession?.title}
                     files={visibleFiles}
+                    onResume={handleResumeSearch}
                 />
             )}
             {activeView === 'knowledge' && (
@@ -684,51 +615,33 @@ export function MainAppView() {
                     snapshot={snapshot}
                     isIndexing={isIndexing}
                     indexProgress={progress}
+                    stageProgress={stageProgress}
+                    onStartSemantic={startSemanticIndexing}
+                    onStopSemantic={stopSemanticIndexing}
+                    onStartDeep={startDeepIndexing}
+                    onStopDeep={stopDeepIndexing}
                     onAddFolder={handleAddFolder}
                     onAddFile={handleAddFile}
                     onRemoveFolder={handleRemoveFolder}
                     onRescanFolder={handleRescanFolder}
                     onReindexFolder={handleReindexFolder}
-                    notes={notes}
-                    selectedNoteId={selectedNoteId}
-                    selectedNote={selectedNote}
-                    notesLoading={isNoteLoading}
-                    notesSaving={isNoteSaving}
-                    onSelectNote={handleSelectNote}
-                    onCreateNote={handleCreateNote}
-                    onDeleteNote={handleDeleteNote}
-                    onSaveNote={handleSaveNote}
-                    notesPendingItems={noteIndexingItems}
-                    onRescanNotesIndex={handleRescanNotesIndex}
-                    onReindexNotesIndex={handleReindexNotesIndex}
+                    indexingItems={indexingItems}
                     onSelectFile={(file) => {
                         setSelectedFile(file);
                         requestRightPanelTab('preview');
                     }}
                     onOpenFile={handleOpenFile}
                     onAskAboutFile={handleAskAboutFile}
+                    onRefresh={refreshData}
                 />
             )}
-            {activeView === 'scan' && (
-                <div className="flex h-full flex-col bg-background">
-                    <div className="flex-none border-b px-6 pt-8 pb-4" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-                        <h2 className="text-lg font-semibold tracking-tight">Quick Scan</h2>
-                        <p className="text-xs text-muted-foreground">Scan files by modification date</p>
-                    </div>
-                    <div className="flex-1 overflow-hidden p-6">
-                        <ScanWorkspace />
-                    </div>
+            {activeView === 'extensions' && (
+                <div className="h-full overflow-hidden">
+                    <ExtensionsView onOpenFile={handleOpenFile} />
                 </div>
             )}
-            {activeView === 'activity' && (
-                <div className="h-full overflow-hidden">
-                    <ActivityTimeline
-                        isTracking={isTrackingActivity}
-                        onToggleTracking={() => setIsTrackingActivity((prev) => !prev)}
-                        summaryFiles={activitySummaryFiles}
-                        onOpenFile={handleOpenFile}
-                    />
-                </div>
+            {activeView === 'memory' && (
+                <UserMemory />
             )}
             {activeView === 'models' && (
                 <SettingsPanel initialTab="models" />

@@ -45,15 +45,16 @@ import {
     Square as SquareIcon,
     Loader2,
     ArrowUp,
+    Search,
 } from 'lucide-react';
 import { YearInReviewModal } from './YearInReviewModal';
 import { cn } from '../lib/utils';
-import type { 
-    FileKind, 
-    ScannedFile, 
-    ScanProgress, 
-    ScanDirectory, 
-    ScanScope, 
+import type {
+    FileKind,
+    ScannedFile,
+    ScanProgress,
+    ScanDirectory,
+    ScanScope,
     FolderNode,
     FileOrigin,
     IndexedFile,
@@ -102,7 +103,7 @@ const TIME_RANGE_KEY = 'synvo-scan-time-range';
 function getTimeRangeDays(rangeId: TimeRange, customFrom?: string, customTo?: string): number | null {
     const range = TIME_RANGES.find(t => t.id === rangeId);
     if (!range) return null;
-    
+
     if (rangeId === 'all') return Infinity;
     if (rangeId === 'custom' && customFrom) {
         const from = new Date(customFrom).getTime();
@@ -138,7 +139,7 @@ function isSelectedRangeExceedingScanned(
         }
         return false;
     }
-    
+
     // Special case: year2025 vs relative ranges
     // If scanned with year2025, selecting relative ranges might exceed if they go beyond 2025
     if (scannedRange === 'year2025') {
@@ -158,16 +159,16 @@ function isSelectedRangeExceedingScanned(
         }
         return false;
     }
-    
+
     // If scanned with 'all', nothing can exceed it
     if (scannedRange === 'all') return false;
-    
+
     // Compare days for relative ranges
     const selectedDays = getTimeRangeDays(selectedRange, selectedCustomFrom, selectedCustomTo);
     const scannedDays = getTimeRangeDays(scannedRange, scannedCustomFrom, scannedCustomTo);
-    
+
     if (selectedDays === null || scannedDays === null) return true; // Can't compare, assume exceeds
-    
+
     return selectedDays > scannedDays;
 }
 
@@ -321,10 +322,10 @@ interface IndexDropdownProps {
     className?: string;
 }
 
-function IndexDropdown({ 
-    label, 
-    options, 
-    onSelect, 
+function IndexDropdown({
+    label,
+    options,
+    onSelect,
     disabled,
     variant = 'default',
     className,
@@ -346,7 +347,7 @@ function IndexDropdown({
 
     const handleToggle = () => {
         if (disabled) return;
-        
+
         if (!isOpen && buttonRef.current) {
             const rect = buttonRef.current.getBoundingClientRect();
             const spaceBelow = window.innerHeight - rect.bottom;
@@ -419,7 +420,7 @@ function ScopeSummary({ scope, onNavigateToSettings }: ScopeSummaryProps) {
         }, 100);
         onNavigateToSettings?.();
     };
-    
+
     if (scope.directories.length === 0) {
         return (
             <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-dashed bg-muted/30">
@@ -434,7 +435,7 @@ function ScopeSummary({ scope, onNavigateToSettings }: ScopeSummaryProps) {
             </div>
         );
     }
-    
+
     return (
         <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -446,8 +447,8 @@ function ScopeSummary({ scope, onNavigateToSettings }: ScopeSummaryProps) {
                     key={dir.path}
                     className={cn(
                         "flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium",
-                        dir.isCloudSync 
-                            ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" 
+                        dir.isCloudSync
+                            ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
                             : "bg-primary/10 text-primary"
                     )}
                 >
@@ -479,22 +480,22 @@ interface FolderTreeNodeProps {
 
 function FolderTreeNode({ node, level, onOpenFile, selectedKind }: FolderTreeNodeProps) {
     const [isExpanded, setIsExpanded] = useState(level < 2);
-    
+
     // Filter files by selected kind
-    const visibleFiles = selectedKind === 'all' 
-        ? node.files 
+    const visibleFiles = selectedKind === 'all'
+        ? node.files
         : node.files.filter(f => f.kind === selectedKind);
-    
+
     // Filter children that have visible files
     const visibleChildren = node.children.filter(child => {
         if (selectedKind === 'all') return child.totalFileCount > 0;
         // Need to check recursively - simplified: just show if totalFileCount > 0
         return child.totalFileCount > 0;
     });
-    
+
     const hasContent = visibleFiles.length > 0 || visibleChildren.length > 0;
     if (!hasContent) return null;
-    
+
     return (
         <div className="select-none">
             {/* Folder header */}
@@ -522,7 +523,7 @@ function FolderTreeNode({ node, level, onOpenFile, selectedKind }: FolderTreeNod
                     </span>
                 </div>
             </button>
-            
+
             {/* Expanded content */}
             {isExpanded && (
                 <div className="ml-2">
@@ -536,12 +537,12 @@ function FolderTreeNode({ node, level, onOpenFile, selectedKind }: FolderTreeNod
                             selectedKind={selectedKind}
                         />
                     ))}
-                    
+
                     {/* Files */}
                     {visibleFiles.map((file) => {
                         const Icon = getFileIcon(file.kind);
                         const OriginIcon = getOriginIcon(file.origin || 'unknown');
-                        
+
                         return (
                             <div
                                 key={file.path}
@@ -550,7 +551,7 @@ function FolderTreeNode({ node, level, onOpenFile, selectedKind }: FolderTreeNod
                             >
                                 <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                                 <span className="text-sm truncate flex-1">{file.name}</span>
-                                
+
                                 {/* Origin badge */}
                                 {file.origin && file.origin !== 'unknown' && (
                                     <span className={cn(
@@ -561,10 +562,10 @@ function FolderTreeNode({ node, level, onOpenFile, selectedKind }: FolderTreeNod
                                         {getOriginLabel(file.origin)}
                                     </span>
                                 )}
-                                
+
                                 <span className="text-[10px] text-muted-foreground">{formatSize(file.size)}</span>
                                 <span className="text-[10px] text-muted-foreground/60">{formatRelativeTime(file.modifiedAt)}</span>
-                                
+
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -603,7 +604,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
         useRecommendedExclusions: true,
         customExclusions: [],
     });
-    
+
     // Filter state - persist time range selection
     const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>(() => {
         try {
@@ -617,7 +618,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
     const [customDateFrom, setCustomDateFrom] = useState<string>('');
     const [customDateTo, setCustomDateTo] = useState<string>('');
     const [showCustomPicker, setShowCustomPicker] = useState(false);
-    
+
     // Track what time range was used for the last scan
     const [scannedTimeRange, setScannedTimeRange] = useState<TimeRange | null>(null);
     const [scannedCustomDates, setScannedCustomDates] = useState<{ from: string; to: string } | null>(null);
@@ -656,19 +657,19 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
     const [folderTree, setFolderTree] = useState<FolderNode[]>([]);
     const [scanStartTime, setScanStartTime] = useState<number | null>(null);
     const [cancelFn, setCancelFn] = useState<(() => void) | null>(null);
-    
+
     // Path ticker for progress display
     const [currentPathDisplay, setCurrentPathDisplay] = useState<string>('');
     const pathTickerRef = useRef<NodeJS.Timeout | null>(null);
-    
+
     // Buffer for files during scanning - reduces React re-renders
     const filesBufferRef = useRef<ScannedFile[]>([]);
     const lastFlushTimeRef = useRef<number>(0);
     const flushIntervalMs = 500; // Flush buffer every 500ms for smoother UI
-    
+
     // Dismiss completed banner
     const [showCompletedBanner, setShowCompletedBanner] = useState(true);
-    
+
     // Year report modal state
     const [showYearReport, setShowYearReport] = useState(false);
     const [reportYear, setReportYear] = useState<number>(new Date().getFullYear());
@@ -677,13 +678,14 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             return sessionStorage.getItem('synvo-viewed-2025-report') === 'true';
         } catch { return false; }
     });
-    
+
     // Index status tracking
     const [indexedFilesMap, setIndexedFilesMap] = useState<Map<string, IndexedFile>>(new Map());
     const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
     const [indexingFiles, setIndexingFiles] = useState<Set<string>>(new Set());
     const [statusFilter, setStatusFilter] = useState<'all' | 'not_indexed' | 'indexed'>('all');
-    
+    const [searchQuery, setSearchQuery] = useState('');
+
     // Check if selected time range exceeds scanned range
     const isExceedingScanRange = useMemo(() => {
         return isSelectedRangeExceedingScanned(
@@ -695,16 +697,16 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             scannedCustomDates?.to
         );
     }, [selectedTimeRange, scannedTimeRange, customDateFrom, customDateTo, scannedCustomDates]);
-    
+
     // Check if Year 2025 report is valid (only if scanned with year2025 or all)
     const isYear2025ReportValid = useMemo(() => {
         return scannedTimeRange === 'year2025' || scannedTimeRange === 'all';
     }, [scannedTimeRange]);
-    
+
     // Pagination for performance - only render visible files
     const ITEMS_PER_PAGE = 100;
     const [displayLimit, setDisplayLimit] = useState(ITEMS_PER_PAGE);
-    
+
     // Save scan results to sessionStorage ONLY when scan completes (not during scanning)
     // This avoids performance issues from serializing 15k+ files on every batch
     useEffect(() => {
@@ -715,7 +717,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             } catch (e) { /* ignore quota errors */ }
         }
     }, [scanProgress.status, scannedFiles]);
-    
+
     // Persist time range selection
     useEffect(() => {
         try {
@@ -727,13 +729,13 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
     const loadIndexedFiles = useCallback(async () => {
         const api = window.api;
         if (!api?.listFiles) return;
-        
+
         try {
             const map = new Map<string, IndexedFile>();
             let offset = 0;
             const limit = 500;
             let hasMore = true;
-            
+
             while (hasMore) {
                 const response = await api.listFiles(limit, offset);
                 for (const file of response.files) {
@@ -743,7 +745,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                 offset += response.files.length;
                 hasMore = response.files.length === limit && offset < response.total;
             }
-            
+
             setIndexedFilesMap(map);
         } catch (error) {
             console.error('Failed to load indexed files:', error);
@@ -767,16 +769,16 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
         if (indexingFiles.has(filePath)) {
             return 'pending';
         }
-        
+
         const indexed = indexedFilesMap.get(filePath);
         if (!indexed) {
             return 'not_indexed';
         }
-        
+
         if (indexed.indexStatus === 'error') {
             return 'error';
         }
-        
+
         // Check chunk_strategy to determine fast/deep
         const metadata = indexed.metadata as Record<string, unknown> | undefined;
         if (metadata?.chunk_strategy) {
@@ -784,25 +786,25 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             if (strategy.includes('_fine')) return 'deep';
             if (strategy.includes('_fast')) return 'fast';
         }
-        
+
         // Fallback to pdf_vision_mode
-        if (metadata?.pdf_vision_mode === 'fine') return 'deep';
+        if (metadata?.pdf_vision_mode === 'deep') return 'deep';
         if (metadata?.pdf_vision_mode === 'fast') return 'fast';
-        
+
         return 'fast'; // Default to fast if indexed
     }, [indexedFilesMap, indexingFiles]);
 
     // Index a single file
-    const handleIndexFile = useCallback(async (filePath: string, mode: 'fast' | 'fine') => {
+    const handleIndexFile = useCallback(async (filePath: string, mode: 'fast' | 'deep') => {
         const api = window.api;
-        if (!api?.runIndex || !api?.addFolder) return;
-        
+        if (!api?.runIndex || !api?.addFolder || !api?.runStagedIndex) return;
+
         setIndexingFiles(prev => new Set(prev).add(filePath));
-        
+
         try {
             // Get the parent directory of the file
             const parentDir = filePath.replace(/[\\/]/g, '/').split('/').slice(0, -1).join('/');
-            
+
             // First, ensure the parent folder is registered with 'manual' scan mode
             // This prevents the folder from being scanned during startup/poll refresh
             try {
@@ -811,15 +813,25 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                 // Folder might already exist, that's fine
                 console.log('Folder may already exist:', folderError);
             }
-            
-            // Now index the specific file with scope: 'folder'
-            await api.runIndex({
-                mode: 'rescan',
-                scope: 'folder',
-                folders: [parentDir],
-                files: [filePath],
-                indexing_mode: mode,
-            });
+
+            // Use different API based on mode:
+            // - Fast: Use staged indexing (fast text extraction, no VLM)
+            // - Deep: Use legacy indexing with VLM processing
+            if (mode === 'fast') {
+                await api.runStagedIndex({
+                    folders: [parentDir],
+                    files: [filePath],
+                    mode: 'reindex', // Always use reindex to reset file stage
+                });
+            } else {
+                await api.runIndex({
+                    mode: 'reindex',
+                    scope: 'folder',
+                    folders: [parentDir],
+                    files: [filePath],
+                    indexing_mode: 'deep',
+                });
+            }
             // Reload indexed files after indexing
             await loadIndexedFiles();
         } catch (error) {
@@ -834,23 +846,23 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
     }, [loadIndexedFiles]);
 
     // Index multiple selected files
-    const handleIndexSelected = useCallback(async (mode: 'fast' | 'fine') => {
+    const handleIndexSelected = useCallback(async (mode: 'fast' | 'deep') => {
         const api = window.api;
-        if (!api?.runIndex || !api?.addFolder || selectedFiles.size === 0) return;
-        
+        if (!api?.runIndex || !api?.addFolder || !api?.runStagedIndex || selectedFiles.size === 0) return;
+
         const filePaths = Array.from(selectedFiles);
-        
+
         // Mark all as indexing
         setIndexingFiles(prev => {
             const next = new Set(prev);
             filePaths.forEach(p => next.add(p));
             return next;
         });
-        
+
         try {
             // Get unique parent directories
             const parentDirs = [...new Set(filePaths.map(fp => fp.replace(/[\\/]/g, '/').split('/').slice(0, -1).join('/')))];
-            
+
             // Ensure all parent folders are registered with 'manual' scan mode
             // This prevents folders from being scanned during startup/poll refresh
             for (const dir of parentDirs) {
@@ -861,15 +873,24 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                     console.log('Folder may already exist:', folderError);
                 }
             }
-            
-            // Now index the files
-            await api.runIndex({
-                mode: 'rescan',
-                scope: 'folder',
-                folders: parentDirs,
-                files: filePaths,
-                indexing_mode: mode,
-            });
+
+            // Use different API based on mode:
+            // - Fast: Use staged indexing (fast text extraction, no VLM)
+            // - Deep: Use legacy indexing with VLM processing
+            if (mode === 'fast') {
+                await api.runStagedIndex({
+                    folders: parentDirs,
+                    files: filePaths,
+                });
+            } else {
+                await api.runIndex({
+                    mode: 'rescan',
+                    scope: 'folder',
+                    folders: parentDirs,
+                    files: filePaths,
+                    indexing_mode: 'deep',
+                });
+            }
             // Reload indexed files and clear selection
             await loadIndexedFiles();
             setSelectedFiles(new Set());
@@ -902,7 +923,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
         const loadSettings = async () => {
             const api = window.api;
             if (!api?.getScanSettings) return;
-            
+
             try {
                 const settings = await api.getScanSettings();
                 if (settings?.scope) {
@@ -912,9 +933,9 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                 console.error('Failed to load scan settings:', error);
             }
         };
-        
+
         loadSettings();
-        
+
         // Re-load when settings might have changed (e.g., returning from Settings)
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
@@ -922,7 +943,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        
+
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
@@ -936,17 +957,17 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                 counts[category.id] = 0;
             }
         }
-        
+
         for (const file of scannedFiles) {
             // Skip code files entirely
             if (file.kind === 'code') continue;
-            
+
             counts.all++;
             if (counts[file.kind] !== undefined) {
                 counts[file.kind]++;
             }
         }
-        
+
         return counts;
     }, [scannedFiles]);
 
@@ -958,16 +979,16 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                 sizes[category.id] = 0;
             }
         }
-        
+
         for (const file of scannedFiles) {
             if (file.kind === 'code') continue;
-            
+
             sizes.all += file.size;
             if (sizes[file.kind] !== undefined) {
                 sizes[file.kind] += file.size;
             }
         }
-        
+
         return sizes;
     }, [scannedFiles]);
 
@@ -993,6 +1014,15 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             });
         }
 
+        // Apply search query filter
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            files = files.filter(f => 
+                f.name.toLowerCase().includes(query) ||
+                f.path.toLowerCase().includes(query)
+            );
+        }
+
         // Apply time range filter (client-side filtering)
         // Only filter if selected range is within or equal to scanned range
         // If selected range exceeds scanned range, skip filtering (show all scanned files)
@@ -1004,14 +1034,14 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             scannedCustomDates?.from,
             scannedCustomDates?.to
         );
-        
+
         if (!exceedsScannedRange) {
             const timeRange = TIME_RANGES.find(t => t.id === selectedTimeRange);
             if (timeRange) {
                 if (selectedTimeRange === 'custom' && customDateFrom) {
                     // Custom date range
                     const fromDate = new Date(customDateFrom).getTime();
-                    const toDate = customDateTo 
+                    const toDate = customDateTo
                         ? new Date(customDateTo + 'T23:59:59').getTime()
                         : Date.now();
                     files = files.filter(f => {
@@ -1057,7 +1087,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
         });
 
         return sorted;
-    }, [scannedFiles, selectedCategory, sortField, sortOrder, statusFilter, getIndexStatus, selectedTimeRange, customDateFrom, customDateTo, scannedTimeRange, scannedCustomDates]);
+    }, [scannedFiles, selectedCategory, sortField, sortOrder, statusFilter, searchQuery, getIndexStatus, selectedTimeRange, customDateFrom, customDateTo, scannedTimeRange, scannedCustomDates]);
 
     // Paginated files for rendering - only show up to displayLimit
     const displayedFiles = useMemo(() => {
@@ -1092,10 +1122,10 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                 setFolderTree([]);
                 return;
             }
-            
+
             const api = window.api;
             if (!api?.buildFolderTree) return;
-            
+
             try {
                 const rootPaths = scope.directories.map(d => d.path);
                 const filterKind = selectedCategory === 'all' ? undefined : selectedCategory;
@@ -1109,7 +1139,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                 console.error('Failed to build folder tree:', error);
             }
         };
-        
+
         buildTree();
     }, [scannedFiles, scope.directories, selectedCategory]);
 
@@ -1118,15 +1148,15 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
         if (scope.directories.length === 0) {
             return;
         }
-        
+
         const timeRange = TIME_RANGES.find(t => t.id === selectedTimeRange);
         if (!timeRange) return;
-        
+
         // Calculate date range for the scan
         let daysBack: number | null = null;
         let dateFrom: string | null = null;
         let dateTo: string | null = null;
-        
+
         if (timeRange.year) {
             // Year-based option - filter files from Jan 1 to Dec 31 of that year
             const yearStart = new Date(timeRange.year, 0, 1);
@@ -1136,8 +1166,8 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
         } else if (selectedTimeRange === 'custom' && customDateFrom) {
             // Custom date range
             dateFrom = new Date(customDateFrom).toISOString();
-            dateTo = customDateTo 
-                ? new Date(customDateTo + 'T23:59:59').toISOString() 
+            dateTo = customDateTo
+                ? new Date(customDateTo + 'T23:59:59').toISOString()
                 : new Date().toISOString();
         } else if (timeRange.days) {
             // Relative days option (Last 24h, Last Week, etc.)
@@ -1159,7 +1189,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
         setScannedFiles([]);
         setFolderTree([]);
         setScanStartTime(Date.now());
-        
+
         // Save the time range used for this scan
         setScannedTimeRange(selectedTimeRange);
         setScannedCustomDates(
@@ -1200,7 +1230,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                     // Buffer incoming files to reduce React re-renders
                     const filteredFiles = files.filter(f => f.kind !== 'code');
                     filesBufferRef.current.push(...filteredFiles);
-                    
+
                     const now = Date.now();
                     if (now - lastFlushTimeRef.current >= flushIntervalMs) {
                         // Flush buffer to state
@@ -1248,7 +1278,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             ...prev,
             status: 'cancelled',
         }));
-        
+
         if (cancelFn) {
             cancelFn();
             setCancelFn(null);
@@ -1269,42 +1299,42 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
     }, []);
 
     // Note: 'cancelled' is not considered scanning so button switches to "Start Scan" immediately
-    const isScanning = scanProgress.status === 'scanning' || 
-                       scanProgress.status === 'planning' || 
-                       scanProgress.status === 'building';
+    const isScanning = scanProgress.status === 'scanning' ||
+        scanProgress.status === 'planning' ||
+        scanProgress.status === 'building';
 
     // Real-time scan duration with timer
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
-    
+
     useEffect(() => {
         if (!isScanning || !scanStartTime) {
             return;
         }
-        
+
         // Update immediately
         setElapsedSeconds(Math.floor((Date.now() - scanStartTime) / 1000));
-        
+
         // Then update every second
         const interval = setInterval(() => {
             setElapsedSeconds(Math.floor((Date.now() - scanStartTime) / 1000));
         }, 1000);
-        
+
         return () => clearInterval(interval);
     }, [isScanning, scanStartTime]);
-    
+
     // Reset elapsed when starting new scan
     useEffect(() => {
         if (scanStartTime) {
             setElapsedSeconds(0);
         }
     }, [scanStartTime]);
-    
+
     const scanDuration = useMemo(() => {
         if (!scanStartTime) return null;
-        
+
         // Use elapsedSeconds for real-time updates during scanning
         const seconds = isScanning ? elapsedSeconds : Math.floor((Date.now() - scanStartTime) / 1000);
-        
+
         if (seconds < 60) return `${seconds}s`;
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = seconds % 60;
@@ -1400,7 +1430,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                     )
                 ))}
             </div>
-            
+
             {/* Custom Date Range Picker */}
             {showCustomPicker && selectedTimeRange === 'custom' && (
                 <div className="flex items-center gap-3 px-4 py-3 rounded-lg border bg-muted/30">
@@ -1519,7 +1549,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                     <span className="text-xs text-muted-foreground font-mono">{scanDuration}</span>
                                 )}
                             </div>
-                            
+
                             {/* Path ticker */}
                             {currentPathDisplay && (
                                 <div className="overflow-hidden">
@@ -1561,7 +1591,8 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                                 setReportYear(2025);
                                                 setShowYearReport(true);
                                                 setHasViewedReport(true);
-                                                try { sessionStorage.setItem('synvo-viewed-2025-report', 'true'); } catch {}
+                                                // eslint-disable-next-line no-empty
+                                                try { sessionStorage.setItem('synvo-viewed-2025-report', 'true'); } catch { }
                                             }}
                                             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-white text-xs font-bold shadow-md hover:shadow-lg transition-all"
                                             style={{
@@ -1593,8 +1624,8 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                 <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />
                                 <p className="text-xs text-amber-700 dark:text-amber-400">
                                     <span className="font-medium">Incomplete data:</span>{' '}
-                                    You scanned with "{TIME_RANGES.find(t => t.id === scannedTimeRange)?.label}". 
-                                    To view files for "{TIME_RANGES.find(t => t.id === selectedTimeRange)?.label}", please rescan.
+                                    You scanned with &quot;{TIME_RANGES.find(t => t.id === scannedTimeRange)?.label}&quot;.
+                                    To view files for &quot;{TIME_RANGES.find(t => t.id === selectedTimeRange)?.label}&quot;, please rescan.
                                 </p>
                             </div>
                         </div>
@@ -1619,26 +1650,45 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                     )}
                                 </button>
                                 <span className="text-xs text-muted-foreground">
-                                    {selectedFiles.size > 0 
-                                        ? `${selectedFiles.size} selected` 
+                                    {selectedFiles.size > 0
+                                        ? `${selectedFiles.size} selected`
                                         : `${filteredFiles.length} ${filteredFiles.length === 1 ? 'file' : 'files'}`}
                                     {isScanning && ' (scanning...)'}
                                 </span>
-                                
+
                                 {/* Batch Index Button */}
                                 {selectedFiles.size > 0 && (
                                     <IndexDropdown
                                         label={`Index ${selectedFiles.size} files`}
                                         options={[
                                             { label: 'Fast Index', value: 'fast' },
-                                            { label: 'Deep Index', value: 'fine' },
+                                            { label: 'Deep Index', value: 'deep' },
                                         ]}
-                                        onSelect={(mode) => handleIndexSelected(mode as 'fast' | 'fine')}
+                                        onSelect={(mode) => handleIndexSelected(mode as 'fast' | 'deep')}
                                         variant="small"
                                     />
                                 )}
                             </div>
                             <div className="flex items-center gap-2">
+                                {/* Search */}
+                                <div className="relative">
+                                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search files..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-40 pl-7 pr-2 py-1 text-xs bg-background border rounded outline-none focus:ring-1 focus:ring-primary"
+                                    />
+                                    {searchQuery && (
+                                        <button
+                                            onClick={() => setSearchQuery('')}
+                                            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted"
+                                        >
+                                            <X className="h-3 w-3 text-muted-foreground" />
+                                        </button>
+                                    )}
+                                </div>
                                 {/* Status Filter */}
                                 <select
                                     value={statusFilter}
@@ -1678,7 +1728,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                         {scanProgress.status === 'idle' ? (
                             selectedTimeRange === 'year2025' ? (
                                 <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                                    <div 
+                                    <div
                                         className="h-20 w-20 rounded-full flex items-center justify-center mb-4 shadow-lg"
                                         style={{
                                             background: 'linear-gradient(135deg, #f472b6, #c084fc, #60a5fa, #34d399)',
@@ -1702,12 +1752,12 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                         <HardDrive className="h-8 w-8 text-muted-foreground/50" />
                                     </div>
                                     <p className="text-sm text-muted-foreground mb-2">
-                                        {scope.directories.length === 0 
+                                        {scope.directories.length === 0
                                             ? 'Select folders to scan above'
                                             : 'Click "Start Scan" to begin'}
                                     </p>
                                     <p className="text-xs text-muted-foreground/70">
-                                        {scope.directories.length > 0 && 
+                                        {scope.directories.length > 0 &&
                                             `Ready to scan ${scope.directories.length} folder${scope.directories.length !== 1 ? 's' : ''}`
                                         }
                                     </p>
@@ -1732,7 +1782,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                     const isSelected = selectedFiles.has(file.path);
                                     const isIndexing = indexingFiles.has(file.path);
                                     const isIndexed = status === 'fast' || status === 'deep';
-                                    
+
                                     return (
                                         <div
                                             key={file.path}
@@ -1752,7 +1802,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                                     <SquareIcon className="h-4 w-4 text-muted-foreground" />
                                                 )}
                                             </button>
-                                            
+
                                             {/* File Icon */}
                                             <button
                                                 onClick={() => handleOpenFile(file)}
@@ -1760,7 +1810,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                             >
                                                 <FileIcon className="h-4 w-4 text-muted-foreground" />
                                             </button>
-                                            
+
                                             {/* File Info */}
                                             <button
                                                 onClick={() => handleOpenFile(file)}
@@ -1771,7 +1821,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                                     {file.parentPath || file.path}
                                                 </p>
                                             </button>
-                                            
+
                                             {/* File Meta and Actions */}
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <span className="text-xs text-muted-foreground hidden sm:inline">
@@ -1780,16 +1830,16 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                                 <span className="text-xs text-muted-foreground hidden sm:inline">
                                                     {formatRelativeTime(file.modifiedAt)}
                                                 </span>
-                                                
+
                                                 {/* Index Status Badge */}
                                                 <IndexStatusBadge status={status} />
-                                                
+
                                                 {/* Upgrade to Deep button for Fast indexed files */}
                                                 {status === 'fast' && !isIndexing && (
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleIndexFile(file.path, 'fine');
+                                                            handleIndexFile(file.path, 'deep');
                                                         }}
                                                         className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:hover:bg-violet-900/50 transition-colors"
                                                         title="Upgrade to Deep index"
@@ -1798,20 +1848,20 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                                                         Deep
                                                     </button>
                                                 )}
-                                                
+
                                                 {/* Index/Reindex Dropdown */}
                                                 {!isIndexing && (
                                                     <IndexDropdown
                                                         label={isIndexed ? 'Reindex' : 'Index'}
                                                         options={[
                                                             { label: 'Fast', value: 'fast' },
-                                                            { label: 'Deep', value: 'fine' },
+                                                            { label: 'Deep', value: 'deep' },
                                                         ]}
-                                                        onSelect={(mode) => handleIndexFile(file.path, mode as 'fast' | 'fine')}
+                                                        onSelect={(mode) => handleIndexFile(file.path, mode as 'fast' | 'deep')}
                                                         variant="small"
                                                     />
                                                 )}
-                                                
+
                                                 {/* Open File */}
                                                 <button
                                                     onClick={(e) => {
@@ -1849,7 +1899,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                     </div>
                 </div>
             </div>
-            
+
             {/* Year In Review Modal */}
             <YearInReviewModal
                 isOpen={showYearReport}

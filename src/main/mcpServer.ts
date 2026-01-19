@@ -17,12 +17,12 @@ export class MCPServer {
     private serverPath: string;
 
     constructor() {
-        // Path to the MCP server module
+        // Path to the MCP server module (now under plugins/mcp/backend)
         if (config.isDev) {
-            this.serverPath = path.join(config.projectRoot, 'services', 'mcp_server');
+            this.serverPath = path.join(config.projectRoot, 'plugins', 'mcp', 'backend');
         } else {
             // In production, look for bundled MCP server
-            this.serverPath = path.join(process.resourcesPath, 'mcp_server');
+            this.serverPath = path.join(process.resourcesPath, 'plugins', 'mcp', 'backend');
         }
     }
 
@@ -105,26 +105,46 @@ export class MCPServer {
             debugLog(`Using Python: ${this.pythonPath}`);
             debugLog(`MCP server path: ${this.serverPath}`);
 
-            const userDataPath = app.getPath('userData');
-            const ragHome = path.join(userDataPath, 'local_rag');
-            const keyPath = path.join(ragHome, 'local_key.txt');
-
-            // Read API key
+            // Read API key - try dev session key first, then legacy paths
             let apiKey = '';
-            if (fs.existsSync(keyPath)) {
-                apiKey = fs.readFileSync(keyPath, 'utf-8').trim();
+            
+            // Priority 1: Dev session key file (new pattern)
+            const devSessionKeyPath = path.join(config.projectRoot, '.dev-session-key');
+            if (fs.existsSync(devSessionKeyPath)) {
+                try {
+                    apiKey = fs.readFileSync(devSessionKeyPath, 'utf-8').trim();
+                    debugLog(`Using dev session key from: ${devSessionKeyPath}`);
+                } catch {
+                    // Ignore read errors
+                }
+            }
+            
+            // Priority 2: Legacy production path
+            if (!apiKey) {
+                const userDataPath = app.getPath('userData');
+                const ragHome = path.join(userDataPath, 'local_rag');
+                const keyPath = path.join(ragHome, 'local_key.txt');
+                if (fs.existsSync(keyPath)) {
+                    try {
+                        apiKey = fs.readFileSync(keyPath, 'utf-8').trim();
+                        debugLog(`Using legacy key from: ${keyPath}`);
+                    } catch {
+                        // Ignore read errors
+                    }
+                }
             }
 
             const env = {
                 ...process.env,
                 LOCAL_COCOA_API_KEY: apiKey,
                 LOCAL_COCOA_BACKEND_URL: `http://127.0.0.1:${config.ports.backend}`,
-                PYTHONPATH: path.dirname(this.serverPath),
+                PYTHONPATH: this.serverPath,
                 PYTHONUNBUFFERED: '1',
             };
 
-            this.process = spawn(this.pythonPath, ['-m', 'mcp_server'], {
-                cwd: path.dirname(this.serverPath),
+            // Run the server module from the backend directory
+            this.process = spawn(this.pythonPath, ['-m', 'server'], {
+                cwd: this.serverPath,
                 env,
                 stdio: ['pipe', 'pipe', 'pipe'],
             });
@@ -186,28 +206,33 @@ export class MCPServer {
 
     /**
      * Generate Claude Desktop configuration for this MCP server
+     * @deprecated Use generateClaudeConfigWithKey instead for persistent API keys
      */
     generateClaudeConfig(): object {
-        const pythonPath = this.getPythonPath();
-        const userDataPath = app.getPath('userData');
-        const ragHome = path.join(userDataPath, 'local_rag');
-        const keyPath = path.join(ragHome, 'local_key.txt');
+        // Legacy method - returns config without API key
+        // The new flow uses generateClaudeConfigWithKey with a persistent key
+        return this.generateClaudeConfigWithKey('');
+    }
 
-        // Read API key if available
-        let apiKey = '';
-        if (fs.existsSync(keyPath)) {
-            apiKey = fs.readFileSync(keyPath, 'utf-8').trim();
-        }
+    /**
+     * Generate Claude Desktop configuration with a specific API key
+     * @param apiKey The persistent API key to use
+     */
+    generateClaudeConfigWithKey(apiKey: string): object {
+        const pythonPath = this.getPythonPath();
+        // Run from plugins/mcp so that "backend" is treated as a package
+        // This allows relative imports (from .client import ...) to work correctly
+        const mcpPluginPath = path.dirname(this.serverPath); // plugins/mcp
 
         return {
             "local-cocoa": {
                 "command": pythonPath,
-                "args": ["-m", "mcp_server"],
-                "cwd": path.dirname(this.serverPath),
+                "args": ["-m", "backend"],
+                "cwd": mcpPluginPath,
                 "env": {
                     "LOCAL_COCOA_API_KEY": apiKey,
                     "LOCAL_COCOA_BACKEND_URL": `http://127.0.0.1:${config.ports.backend}`,
-                    "PYTHONPATH": path.dirname(this.serverPath),
+                    "PYTHONPATH": mcpPluginPath,
                     "PYTHONUNBUFFERED": "1"
                 }
             }
@@ -242,3 +267,4 @@ export class MCPServer {
         }
     }
 }
+

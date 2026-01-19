@@ -55,6 +55,7 @@ interface ConversationPanelProps {
     onResetConversation?: () => void;
     agentContext?: AgentContext | null;
     files?: IndexedFile[];
+    onResume?: (mode?: SearchMode) => Promise<void>;
 }
 
 function getReferenceLabel(reference: SearchHit): { name: string; location: string } {
@@ -85,15 +86,15 @@ function ReferenceItem({ reference, index, onPreview }: { reference: SearchHit, 
     const { name, location } = getReferenceLabel(reference);
     const snippet = reference.snippet || reference.summary;
     const isClickable = !!(reference.fileId || location);
-    
+
     // Chunk analysis info
     const hasAnswer = reference.hasAnswer;
     const analysisComment = reference.analysisComment;
     const confidence = reference.analysisConfidence ?? 0;
-    
+
     // Determine if this chunk was analyzed (hasAnswer is defined means it was analyzed)
     const wasAnalyzed = hasAnswer !== undefined;
-    
+
     // Check if comment indicates no relevant information
     const commentUpper = analysisComment?.toUpperCase() ?? '';
     const noAnswerPatterns = [
@@ -117,13 +118,13 @@ function ReferenceItem({ reference, index, onPreview }: { reference: SearchHit, 
     ];
     const containsNoAnswer = noAnswerPatterns.some(pattern => commentUpper.includes(pattern));
     const isRelevant = hasAnswer === true && !containsNoAnswer;
-    
+
     // Extract page information from metadata
     const metadata = reference.metadata ?? {};
     const pageStart = metadata.page_start ?? metadata.page_number ?? null;
     const pageEnd = metadata.page_end ?? null;
     const pageNumbers = metadata.page_numbers as number[] | undefined;
-    
+
     // Format page display
     let pageDisplay = '';
     if (pageStart) {
@@ -143,8 +144,7 @@ function ReferenceItem({ reference, index, onPreview }: { reference: SearchHit, 
     // Confidence badge color
     const getConfidenceBadge = () => {
         if (!wasAnalyzed) return null;
-        
-        // Not relevant (either hasAnswer=false or contains NO_ANSWER)
+
         if (!isRelevant) {
             return (
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
@@ -152,25 +152,10 @@ function ReferenceItem({ reference, index, onPreview }: { reference: SearchHit, 
                 </span>
             );
         }
-        
-        // Relevant with different confidence levels
-        if (confidence >= 0.8) {
-            return (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                    High relevance
-                </span>
-            );
-        }
-        if (confidence >= 0.6) {
-            return (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                    Medium relevance
-                </span>
-            );
-        }
+
         return (
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-                Low relevance
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                Relevant
             </span>
         );
     };
@@ -193,7 +178,7 @@ function ReferenceItem({ reference, index, onPreview }: { reference: SearchHit, 
             >
                 <div className={cn(
                     "flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-bold",
-                    wasAnalyzed && isRelevant 
+                    wasAnalyzed && isRelevant
                         ? "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400"
                         : wasAnalyzed && !isRelevant
                             ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
@@ -214,18 +199,24 @@ function ReferenceItem({ reference, index, onPreview }: { reference: SearchHit, 
                                 <p className="text-[10px] text-muted-foreground font-medium">{pageDisplay}</p>
                             </>
                         )}
+                        {reference.score > 0 && (
+                            <>
+                                {(location || pageDisplay) && <span className="text-[10px] text-muted-foreground">•</span>}
+                                <p className="text-[10px] text-muted-foreground font-mono">{reference.score.toFixed(2)}</p>
+                            </>
+                        )}
                     </div>
                 </div>
                 {isClickable && (
                     <FileText className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                 )}
             </button>
-            
+
             {/* LLM Analysis Comment */}
             {analysisComment && (
                 <div className={cn(
                     "border-t px-3 py-2",
-                    isRelevant 
+                    isRelevant
                         ? "border-green-200 dark:border-green-800/30 bg-green-50/50 dark:bg-green-900/10"
                         : "border-red-200 dark:border-red-800/30 bg-red-50/50 dark:bg-red-900/10"
                 )}>
@@ -240,7 +231,7 @@ function ReferenceItem({ reference, index, onPreview }: { reference: SearchHit, 
                     </p>
                 </div>
             )}
-            
+
             {/* Original Snippet */}
             {snippet && (
                 <div
@@ -301,13 +292,13 @@ function RecalledContext({ references, onPreview, isComplete, analysisProgress }
     const isTrulyRelevant = (r: SearchHit) => {
         if (r.hasAnswer !== true) return false;
         const comment = r.analysisComment?.toUpperCase() ?? '';
-        
+
         // Explicit markers - check globally (LLM's clear signal)
         const explicitMarkers = ['NO_ANSWER', 'NO ANSWER'];
         if (explicitMarkers.some(marker => comment.includes(marker))) {
             return false;
         }
-        
+
         // Contextual patterns - only check in first sentence to avoid false positives
         const firstSentence = comment.split(/[.?!]\s/)[0] || comment;
         const contextualPatterns = [
@@ -451,8 +442,8 @@ function RecalledContext({ references, onPreview, isComplete, analysisProgress }
                     {notRelevantRefs.length > 0 && (
                         <div className={cn(
                             "mt-3 rounded-lg border border-dashed transition-all duration-200",
-                            showNotRelevant 
-                                ? "border-muted-foreground/30 bg-muted/20" 
+                            showNotRelevant
+                                ? "border-muted-foreground/30 bg-muted/20"
                                 : "border-muted-foreground/20 hover:border-muted-foreground/30 bg-muted/10"
                         )}>
                             <button
@@ -464,10 +455,10 @@ function RecalledContext({ references, onPreview, isComplete, analysisProgress }
                                         "flex h-5 w-5 items-center justify-center rounded transition-transform duration-200",
                                         showNotRelevant ? "rotate-90" : ""
                                     )}>
-                                        <svg 
-                                            className="h-3 w-3 text-muted-foreground" 
-                                            fill="none" 
-                                            viewBox="0 0 24 24" 
+                                        <svg
+                                            className="h-3 w-3 text-muted-foreground"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
                                             stroke="currentColor"
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -482,7 +473,7 @@ function RecalledContext({ references, onPreview, isComplete, analysisProgress }
                                     {showNotRelevant ? 'Click to collapse' : 'Click to expand'}
                                 </span>
                             </button>
-                            
+
                             {showNotRelevant && (
                                 <div className="px-3 pb-3 pt-1 grid gap-2 sm:grid-cols-1 animate-in slide-in-from-top-2 duration-200">
                                     {sortedNotRelevantRefs.map((reference, idx) => (
@@ -524,7 +515,8 @@ export function ConversationPanel({
     onPreviewReference,
     onResetConversation,
     agentContext,
-    files = []
+    files = [],
+    onResume
 }: ConversationPanelProps) {
     const [input, setInput] = useState('');
     const [suggestionQuery, setSuggestionQuery] = useState<string | null>(null);
@@ -573,8 +565,8 @@ export function ConversationPanel({
             const key = await window.api.getLocalKey();
             if (key) {
                 // Check if user has any indexed files
-                const summaryRes = await fetch('http://127.0.0.1:8890/index/summary', { 
-                    headers: { 'X-API-Key': key } 
+                const summaryRes = await fetch('http://127.0.0.1:8890/index/summary', {
+                    headers: { 'X-API-Key': key }
                 });
                 const summary = await summaryRes.json();
                 const fileCount = summary?.files_indexed ?? 0;
@@ -582,8 +574,8 @@ export function ConversationPanel({
 
                 if (fileCount > 0) {
                     // User has files - fetch suggestions from their documents
-                    const res = await fetch('http://127.0.0.1:8890/suggestions?limit=4', { 
-                        headers: { 'X-API-Key': key } 
+                    const res = await fetch('http://127.0.0.1:8890/suggestions?limit=4', {
+                        headers: { 'X-API-Key': key }
                     });
                     const data = await res.json();
                     // Use document-based suggestions, or empty if none available
@@ -630,17 +622,29 @@ export function ConversationPanel({
 
     function renderMessageText(text: string, references?: SearchHit[]) {
         // Process reference citations [1], [2], etc.
+        // Also handles comma-separated formats like [11, 18, 29] by normalizing them first
         const processReferences = (content: string) => {
             if (!references || references.length === 0) {
                 return content;
             }
 
-            const parts = content.split(/(\[\s*\d+\s*\])/g);
+            // First, normalize comma-separated citations like [11, 18, 29] to [11][18][29]
+            const normalizedContent = content.replace(
+                /\[\s*(\d+(?:\s*,\s*\d+)+)\s*\]/g,
+                (match, nums) => {
+                    const numbers = nums.split(/\s*,\s*/);
+                    return numbers.map((n: string) => `[${n.trim()}]`).join('');
+                }
+            );
+
+            const parts = normalizedContent.split(/(\[\s*\d+\s*\])/g);
             return parts.map((part, i) => {
                 const match = part.match(/^\[\s*(\d+)\s*\]$/);
                 if (match) {
-                    const index = parseInt(match[1], 10) - 1;
-                    const reference = references[index];
+                    const citationNumber = parseInt(match[1], 10);
+                    // Find reference by metadata.index (global citation index from backend)
+                    // This is critical for multi-path retrieval where indices span multiple rounds
+                    const reference = references.find(r => r.metadata?.index === citationNumber);
                     if (reference) {
                         const { location } = getReferenceLabel(reference);
                         const isClickable = !!(reference.fileId || location);
@@ -678,10 +682,10 @@ export function ConversationPanel({
                                 return <p>{processReferences(children)}</p>;
                             }
                             // Handle array of children
-                            const processed = Array.isArray(children) 
-                                ? children.map((child, idx) => 
+                            const processed = Array.isArray(children)
+                                ? children.map((child, idx) =>
                                     typeof child === 'string' ? processReferences(child) : child
-                                  )
+                                )
                                 : children;
                             return <p>{processed}</p>;
                         },
@@ -690,13 +694,13 @@ export function ConversationPanel({
                             const isInline = !className;
                             if (isInline) {
                                 return (
-                                    <code 
+                                    <code
                                         className={cn(
                                             "px-1 py-0.5 rounded text-sm",
-                                            isCocoaSkin 
-                                                ? "bg-[#c9a87c]/20 text-[#5c4a2a]" 
+                                            isCocoaSkin
+                                                ? "bg-[#c9a87c]/20 text-[#5c4a2a]"
                                                 : "bg-muted text-foreground"
-                                        )} 
+                                        )}
                                         {...props}
                                     >
                                         {children}
@@ -713,8 +717,8 @@ export function ConversationPanel({
                         pre: ({ children }) => (
                             <pre className={cn(
                                 "p-3 rounded-lg overflow-x-auto text-sm",
-                                isCocoaSkin 
-                                    ? "bg-[#2a1f14] text-[#e8d4bc]" 
+                                isCocoaSkin
+                                    ? "bg-[#2a1f14] text-[#e8d4bc]"
                                     : "bg-muted"
                             )}>
                                 {children}
@@ -722,9 +726,9 @@ export function ConversationPanel({
                         ),
                         // Style links
                         a: ({ href, children }) => (
-                            <a 
-                                href={href} 
-                                target="_blank" 
+                            <a
+                                href={href}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className={cn(
                                     "underline",
@@ -772,7 +776,7 @@ export function ConversationPanel({
                     </div>
                 </>
             )}
-            
+
             <div className={cn(
                 "flex items-center justify-between border-b px-6 py-3 pt-8 relative z-10",
                 isCocoaSkin && "cocoa-header-glass border-[#c9a87c]/30"
@@ -801,7 +805,7 @@ export function ConversationPanel({
                             disabled={!hasMessages && !hasInput}
                             className={cn(
                                 "rounded-md p-1.5 transition-colors disabled:opacity-50",
-                                isCocoaSkin 
+                                isCocoaSkin
                                     ? "text-[#8b6914] hover:bg-[#c9a87c]/20 hover:text-[#5c4a2a]"
                                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             )}
@@ -851,8 +855,8 @@ export function ConversationPanel({
                                     disabled={isRefreshingSuggestions}
                                     className={cn(
                                         "absolute -top-6 right-0 p-1 rounded-md transition-colors opacity-40 hover:opacity-100",
-                                        isCocoaSkin 
-                                            ? "text-[#8b6914] hover:bg-[#c9a87c]/20" 
+                                        isCocoaSkin
+                                            ? "text-[#8b6914] hover:bg-[#c9a87c]/20"
                                             : "text-muted-foreground hover:bg-accent"
                                     )}
                                     title="Refresh suggestions"
@@ -860,22 +864,22 @@ export function ConversationPanel({
                                     <RefreshCw className={cn("h-3.5 w-3.5", isRefreshingSuggestions && "animate-spin")} />
                                 </button>
                             )}
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 w-full">
-                            {quickSuggestions.map((prompt) => (
-                                <button
-                                    key={prompt}
-                                    onClick={() => setInput(prompt)}
-                                    className={cn(
-                                        "rounded-lg border px-4 py-3 text-left text-sm transition-colors",
-                                        isCocoaSkin 
-                                            ? "cocoa-suggestion-card border-[#c9a87c] text-[#5c4a2a] dark:text-[#e8d4bc]" 
-                                            : "bg-card hover:bg-accent hover:text-accent-foreground"
-                                    )}
-                                >
-                                    {prompt}
-                                </button>
-                            ))}
-                        </div>
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 w-full">
+                                {quickSuggestions.map((prompt) => (
+                                    <button
+                                        key={prompt}
+                                        onClick={() => setInput(prompt)}
+                                        className={cn(
+                                            "rounded-lg border px-4 py-3 text-left text-sm transition-colors",
+                                            isCocoaSkin
+                                                ? "cocoa-suggestion-card border-[#c9a87c] text-[#5c4a2a] dark:text-[#e8d4bc]"
+                                                : "bg-card hover:bg-accent hover:text-accent-foreground"
+                                        )}
+                                    >
+                                        {prompt}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 ) : (
@@ -906,11 +910,15 @@ export function ConversationPanel({
                                         </div>
                                     )}
 
-                                    {!isUser && message.isMultiPath && message.thinkingSteps && message.thinkingSteps.length > 0 && (
+
+                                    {!isUser && message.thinkingSteps && message.thinkingSteps.length > 0 && (
                                         <div className="ml-1 mb-3">
                                             <ThinkingProcess
                                                 steps={message.thinkingSteps}
                                                 isComplete={!message.meta || message.meta === undefined}
+                                                needsUserDecision={message.needsUserDecision}
+                                                decisionMessage={message.decisionMessage}
+                                                onResume={() => onResume?.(searchMode)}
                                                 onHitClick={(hit) => {
                                                     if (onPreviewReference) {
                                                         onPreviewReference({
@@ -927,8 +935,8 @@ export function ConversationPanel({
                                         </div>
                                     )}
 
-                                    {/* Show RecalledContext only for non-multi-path queries */}
-                                    {!isUser && !message.isMultiPath && message.references && message.references.length > 0 && (
+                                    {/* Show RecalledContext only when there are no thinking steps (they already show the same info) */}
+                                    {!isUser && (!message.thinkingSteps || message.thinkingSteps.length === 0) && message.references && message.references.length > 0 && (
                                         <div className="ml-1 mb-3">
                                             <RecalledContext
                                                 references={message.references}
@@ -1007,11 +1015,11 @@ export function ConversationPanel({
                                     className={cn(
                                         "flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm",
                                         isCocoaSkin
-                                            ? index === selectedIndex 
-                                                ? "bg-[#c9a87c]/30 text-[#5c4a2a]" 
+                                            ? index === selectedIndex
+                                                ? "bg-[#c9a87c]/30 text-[#5c4a2a]"
                                                 : "text-[#5c4a2a] hover:bg-[#c9a87c]/20"
-                                            : index === selectedIndex 
-                                                ? "bg-accent text-accent-foreground" 
+                                            : index === selectedIndex
+                                                ? "bg-accent text-accent-foreground"
                                                 : "text-popover-foreground hover:bg-accent/50"
                                     )}
                                 >
@@ -1026,8 +1034,8 @@ export function ConversationPanel({
                         rows={1}
                         className={cn(
                             "w-full resize-none rounded-xl border py-3.5 pl-4 pr-12 text-sm focus:outline-none overflow-y-auto no-scrollbar",
-                            isCocoaSkin 
-                                ? "cocoa-chat-input bg-white/70 dark:bg-[#2a1f14]/80 border-[#c9a87c] placeholder:text-[#8b6914]/60 focus:border-[#b8956f] focus:ring-1 focus:ring-[#b8956f]/50" 
+                            isCocoaSkin
+                                ? "cocoa-chat-input bg-white/70 dark:bg-[#2a1f14]/80 border-[#c9a87c] placeholder:text-[#8b6914]/60 focus:border-[#b8956f] focus:ring-1 focus:ring-[#b8956f]/50"
                                 : "bg-muted/30 placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
                         )}
                         placeholder="Message..."
@@ -1104,7 +1112,7 @@ export function ConversationPanel({
                         <Send className="h-4 w-4" />
                     </button>
                 </form>
-                
+
                 {/* Search Mode Selector */}
                 <div className="mx-auto max-w-4xl mt-2 flex items-center justify-between">
                     <div className="relative" ref={modeDropdownRef}>
@@ -1133,20 +1141,20 @@ export function ConversationPanel({
                                 );
                             })()}
                         </button>
-                        
+
                         {/* Dropdown Menu */}
                         {isModeDropdownOpen && (
                             <div className={cn(
                                 "absolute bottom-full left-0 mb-1 w-48 rounded-lg border shadow-lg py-1 z-50",
-                                isCocoaSkin 
-                                    ? "bg-[#f5e6d3] border-[#c9a87c]/50 shadow-[#8b6914]/10" 
+                                isCocoaSkin
+                                    ? "bg-[#f5e6d3] border-[#c9a87c]/50 shadow-[#8b6914]/10"
                                     : "bg-popover border-border"
                             )}>
                                 {(Object.keys(SEARCH_MODE_CONFIG) as SearchMode[]).map((mode) => {
                                     const config = SEARCH_MODE_CONFIG[mode];
                                     const Icon = config.icon;
                                     const isActive = searchMode === mode;
-                                    
+
                                     return (
                                         <button
                                             key={mode}
@@ -1168,8 +1176,8 @@ export function ConversationPanel({
                                         >
                                             <Icon className={cn(
                                                 "h-4 w-4 mt-0.5 flex-shrink-0",
-                                                isActive 
-                                                    ? isCocoaSkin ? "text-[#8b6914]" : "text-primary" 
+                                                isActive
+                                                    ? isCocoaSkin ? "text-[#8b6914]" : "text-primary"
                                                     : "opacity-60"
                                             )} />
                                             <div className="flex-1 min-w-0">
@@ -1198,7 +1206,7 @@ export function ConversationPanel({
                             </div>
                         )}
                     </div>
-                    
+
                     <div className={cn(
                         "text-[10px]",
                         isCocoaSkin ? "text-[#8b6914]/70" : "text-muted-foreground"

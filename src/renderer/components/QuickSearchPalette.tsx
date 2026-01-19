@@ -69,6 +69,30 @@ function getReferenceLabel(reference: SearchHit): { name: string; location: stri
     return { name: `File ${reference.fileId}`, location: '' };
 }
 
+// Extract page number from chunk metadata if available
+function getPageNumber(hit: SearchHit): number | null {
+    const metadata = hit.metadata ?? {};
+
+    // Try various page number keys
+    for (const key of ['page_number', 'page', 'page_start']) {
+        const val = metadata[key];
+        if (typeof val === 'number' && val > 0) {
+            return val;
+        }
+    }
+
+    // Try page_numbers array
+    const pageNumbers = metadata.page_numbers;
+    if (Array.isArray(pageNumbers) && pageNumbers.length > 0) {
+        const first = pageNumbers[0];
+        if (typeof first === 'number' && first > 0) {
+            return first;
+        }
+    }
+
+    return null;
+}
+
 // Score threshold below which results are collapsed
 const LOW_SCORE_THRESHOLD = 0.3;
 
@@ -104,6 +128,10 @@ interface QuickSearchPaletteProps {
     onSaveNote?: (noteId: string, payload: { title: string; body: string }) => void;
     onDeleteNote?: (noteId: string) => void;
     onBackToNotesList?: () => void;
+    // Progressive QA props
+    needsUserDecision?: boolean;
+    onResumeSearch?: () => void;
+    resumeToken?: string | null;
 }
 
 export function QuickSearchPalette({
@@ -133,18 +161,35 @@ export function QuickSearchPalette({
     onCreateNote,
     onSaveNote,
     onDeleteNote,
-    onBackToNotesList
+    onBackToNotesList,
+    needsUserDecision = false,
+    onResumeSearch,
+    resumeToken
 }: QuickSearchPaletteProps) {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const [hoveredHit, setHoveredHit] = useState<SearchHit | null>(null);
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-    
+    const [elapsedTime, setElapsedTime] = useState(0);
+
+    // Timer logic
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isSearching) {
+            const startTime = Date.now();
+            setElapsedTime(0);
+            interval = setInterval(() => {
+                setElapsedTime(Date.now() - startTime);
+            }, 50); // Update frequently for smooth fractions
+        }
+        return () => clearInterval(interval);
+    }, [isSearching]);
+
     // Notes editing state
     const [editingTitle, setEditingTitle] = useState('');
     const [editingBody, setEditingBody] = useState('');
     const [noteSearchQuery, setNoteSearchQuery] = useState('');
-    
+
     // Sync editing state when selected note changes
     useEffect(() => {
         if (selectedNote) {
@@ -155,33 +200,33 @@ export function QuickSearchPalette({
             setEditingBody('');
         }
     }, [selectedNote]);
-    
+
     // Auto-save with debounce
     const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved'>('idle');
-    
+
     useEffect(() => {
         // Clear any existing timeout
         if (autoSaveTimeoutRef.current) {
             clearTimeout(autoSaveTimeoutRef.current);
         }
-        
+
         // Don't auto-save if no note selected or content hasn't changed
         if (!selectedNote?.id) {
             setAutoSaveStatus('idle');
             return;
         }
-        
-        const hasChanges = editingTitle !== (selectedNote.title || '') || 
-                          editingBody !== (selectedNote.markdown || '');
-        
+
+        const hasChanges = editingTitle !== (selectedNote.title || '') ||
+            editingBody !== (selectedNote.markdown || '');
+
         if (!hasChanges) {
             setAutoSaveStatus('idle');
             return;
         }
-        
+
         setAutoSaveStatus('pending');
-        
+
         // Auto-save after 1.5 seconds of no changes
         autoSaveTimeoutRef.current = setTimeout(() => {
             if (selectedNote?.id && onSaveNote) {
@@ -190,14 +235,14 @@ export function QuickSearchPalette({
                 // Will be set to 'saved' after save completes
             }
         }, 1500);
-        
+
         return () => {
             if (autoSaveTimeoutRef.current) {
                 clearTimeout(autoSaveTimeoutRef.current);
             }
         };
     }, [editingTitle, editingBody, selectedNote, onSaveNote]);
-    
+
     // Update auto-save status when save completes
     useEffect(() => {
         if (!isNoteSaving && autoSaveStatus === 'saving') {
@@ -207,24 +252,24 @@ export function QuickSearchPalette({
             return () => clearTimeout(timer);
         }
     }, [isNoteSaving, autoSaveStatus]);
-    
+
     // Focus textarea when editing a note
     useEffect(() => {
         if (activeTab === 'notes' && selectedNote && textareaRef.current) {
             textareaRef.current.focus();
         }
     }, [activeTab, selectedNote]);
-    
+
     // Filter notes by search query
     const filteredNotes = useMemo(() => {
         if (!noteSearchQuery.trim()) return notes;
         const q = noteSearchQuery.toLowerCase();
-        return notes.filter(n => 
+        return notes.filter(n =>
             (n.title || '').toLowerCase().includes(q) ||
             (n.preview || '').toLowerCase().includes(q)
         );
     }, [notes, noteSearchQuery]);
-    
+
     const handleSaveNote = useCallback(() => {
         if (!selectedNote?.id || !onSaveNote) return;
         onSaveNote(selectedNote.id, { title: editingTitle, body: editingBody });
@@ -243,7 +288,7 @@ export function QuickSearchPalette({
                 }
             }
         };
-        
+
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [activeTab, selectedNote, onBackToNotesList, onClose]);
@@ -348,7 +393,7 @@ export function QuickSearchPalette({
                     "ring-1 ring-border"
                 )}>
                     {/* Header with Tabs - Draggable */}
-                    <div 
+                    <div
                         className="flex items-center justify-between border-b px-6 py-3"
                         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
                     >
@@ -358,8 +403,8 @@ export function QuickSearchPalette({
                                 onClick={() => onTabChange?.('search')}
                                 className={cn(
                                     "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors",
-                                    activeTab === 'search' 
-                                        ? "bg-primary/10 text-primary" 
+                                    activeTab === 'search'
+                                        ? "bg-primary/10 text-primary"
                                         : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                                 )}
                             >
@@ -371,8 +416,8 @@ export function QuickSearchPalette({
                                 onClick={() => onTabChange?.('notes')}
                                 className={cn(
                                     "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors",
-                                    activeTab === 'notes' 
-                                        ? "bg-primary/10 text-primary" 
+                                    activeTab === 'notes'
+                                        ? "bg-primary/10 text-primary"
                                         : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                                 )}
                             >
@@ -428,273 +473,316 @@ export function QuickSearchPalette({
                             {/* Content Area */}
                             <div className="flex max-h-[60vh] flex-col overflow-y-auto px-6 pb-6 scrollbar-thin scrollbar-thumb-muted-foreground/20">
 
-                        {/* Status & Metrics */}
-                        <div className="mb-4 flex flex-col gap-2">
-                            <div className="flex items-center gap-3 min-h-[24px]">
-                                {isSearching && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                                {/* Status & Metrics */}
+                                <div className="mb-4 flex flex-col gap-2">
+                                    <div className="flex items-center gap-3 min-h-[24px]">
+                                        {isSearching && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
 
-                                {/* Show file/chunk count when searching or complete */}
-                                {fileGroups.length > 0 && (
-                                    <span className="text-xs text-muted-foreground">
-                                        {fileGroups.length} file{fileGroups.length === 1 ? '' : 's'} · {results.length} chunk{results.length === 1 ? '' : 's'}
-                                    </span>
-                                )}
-                                
-                                {statusMessage && !isSearching && fileGroups.length === 0 && (
-                                    <span className="text-xs text-muted-foreground">{statusMessage}</span>
-                                )}
+                                        {/* Show file/chunk count when searching or complete */}
+                                        {fileGroups.length > 0 && (
+                                            <span className="text-xs text-muted-foreground">
+                                                {fileGroups.length} file{fileGroups.length === 1 ? '' : 's'} · {results.length} chunk{results.length === 1 ? '' : 's'}
+                                            </span>
+                                        )}
 
-                                {searchContext && !isSearching && searchContext.strategy && (
-                                    <span className="ml-auto rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary uppercase">
-                                        {searchContext.strategy.replace(/_/g, ' ')}
-                                    </span>
-                                )}
-                            </div>
+                                        {statusMessage && !isSearching && fileGroups.length === 0 && (
+                                            <span className="text-xs text-muted-foreground">{statusMessage}</span>
+                                        )}
 
-                            {/* Progressive search stage indicator */}
-                            {isSearching && searchStage && (
-                                <div className="flex items-center gap-2">
-                                    <div className="flex gap-1">
-                                        {['filename', 'summary', 'metadata', 'hybrid'].map((stage) => {
-                                            const stageOrder = ['filename', 'summary', 'metadata', 'hybrid'];
-                                            const currentIdx = stageOrder.indexOf(searchStage);
-                                            const stageIdx = stageOrder.indexOf(stage);
-                                            const isActive = stage === searchStage;
-                                            const isComplete = stageIdx < currentIdx;
-                                            
-                                            return (
-                                                <div
-                                                    key={stage}
-                                                    className={cn(
-                                                        "h-1 w-8 rounded-full transition-all duration-300",
-                                                        isActive && "bg-primary animate-pulse",
-                                                        isComplete && "bg-primary",
-                                                        !isActive && !isComplete && "bg-muted"
-                                                    )}
-                                                />
-                                            );
-                                        })}
+                                        {searchContext && !isSearching && searchContext.strategy && (
+                                            <span className="ml-auto rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary uppercase">
+                                                {searchContext.strategy.replace(/_/g, ' ')}
+                                            </span>
+                                        )}
+
+                                        {/* Timer display */}
+                                        {/* Timer display */}
+                                        {elapsedTime > 0 && (
+                                            <span className="text-xs text-muted-foreground font-mono ml-2">
+                                                {(elapsedTime / 1000).toFixed(2)}s
+                                            </span>
+                                        )}
                                     </div>
-                                    <span className="text-[10px] text-muted-foreground capitalize">
-                                        {searchStage}
-                                    </span>
+
+                                    {/* Progressive search stage indicator */}
+                                    {isSearching && searchStage && (
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex gap-1">
+                                                {['filename', 'summary', 'metadata', 'hybrid'].map((stage) => {
+                                                    const stageOrder = ['filename', 'summary', 'metadata', 'hybrid'];
+                                                    const currentIdx = stageOrder.indexOf(searchStage);
+                                                    const stageIdx = stageOrder.indexOf(stage);
+                                                    const isActive = stage === searchStage;
+                                                    const isComplete = stageIdx < currentIdx;
+
+                                                    return (
+                                                        <div
+                                                            key={stage}
+                                                            className={cn(
+                                                                "h-1 w-8 rounded-full transition-all duration-300",
+                                                                isActive && "bg-primary animate-pulse",
+                                                                isComplete && "bg-primary",
+                                                                !isActive && !isComplete && "bg-muted"
+                                                            )}
+                                                        />
+                                                    );
+                                                })}
+                                            </div>
+                                            <span className="text-[10px] text-muted-foreground capitalize">
+                                                {searchStage}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
 
-                        {/* QA Answer */}
-                        {mode === 'qa' && qaAnswer && (
-                            <div className="mb-6 rounded-xl border bg-muted/30 p-4">
-                                <div className="prose prose-sm dark:prose-invert max-w-none">
-                                    <ReactMarkdown components={markdownComponents}>{qaAnswer}</ReactMarkdown>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Results List - Grouped by File */}
-                        {fileGroups.length > 0 && (() => {
-                            // Split into high-score and low-score groups
-                            const highScoreGroups = fileGroups.filter(g => g.bestScore >= LOW_SCORE_THRESHOLD);
-                            const lowScoreGroups = fileGroups.filter(g => g.bestScore < LOW_SCORE_THRESHOLD);
-
-                            return (
-                            <div className="space-y-3">
-                                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Results</h4>
-                                <div className="space-y-2">
-                                    {highScoreGroups.map((group) => {
-                                        const isExpanded = expandedFiles.has(group.fileId);
-                                        const hasMultipleChunks = group.chunks.length > 1;
-                                        const primaryChunk = group.chunks[0];
-                                        const firstSeenMs = fileFirstSeenMs[group.fileId];
-
-                                        return (
-                                            <div
-                                                key={group.fileId}
-                                                className="rounded-lg border bg-card overflow-hidden transition-all hover:border-primary/50 hover:shadow-md"
-                                            >
-                                                {/* File Header */}
-                                                <div
-                                                    className="group flex items-start gap-3 p-4 cursor-pointer"
-                                                    onClick={() => hasMultipleChunks && toggleFileExpanded(group.fileId)}
-                                                    onMouseEnter={() => setHoveredHit(primaryChunk)}
-                                                    onMouseLeave={() => setHoveredHit(null)}
+                                {/* QA Answer */}
+                                {mode === 'qa' && qaAnswer && (
+                                    <div className="mb-6 rounded-xl border bg-muted/30 p-4">
+                                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                                            <ReactMarkdown components={markdownComponents}>{qaAnswer}</ReactMarkdown>
+                                        </div>
+                                        {/* Progressive Resume Button */}
+                                        {needsUserDecision && (
+                                            <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3">
+                                                <span className="text-xs text-muted-foreground">
+                                                    Found a likely answer. Search paused.
+                                                </span>
+                                                <button
+                                                    onClick={onResumeSearch}
+                                                    className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
                                                 >
-                                                    {/* Expand/Collapse Icon */}
-                                                    <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center mt-0.5">
-                                                        {hasMultipleChunks ? (
-                                                            isExpanded ? (
-                                                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                                            ) : (
-                                                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                                            )
-                                                        ) : (
-                                                            <FileText className="h-4 w-4 text-muted-foreground" />
-                                                        )}
-                                                    </div>
+                                                    <Search className="h-3.5 w-3.5" />
+                                                    Dig Deeper
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
-                                                    {/* File Info */}
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <div className="flex items-center gap-2 min-w-0">
-                                                                {hasMultipleChunks && <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                                                                <span className="truncate font-medium text-sm text-foreground">
-                                                                    {group.fileName}
-                                                                </span>
-                                                                {hasMultipleChunks && (
-                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                                                                        <Layers className="h-3 w-3" />
-                                                                        {group.chunks.length}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <div className="flex items-center gap-2 shrink-0">
-                                                                {typeof firstSeenMs === 'number' && (
-                                                                    <span className="text-[10px] text-muted-foreground/60 font-mono">
-                                                                        {(firstSeenMs / 1000).toFixed(2)}s
-                                                                    </span>
-                                                                )}
-                                                                <span className="text-[10px] text-muted-foreground font-mono">
-                                                                    {group.bestScore.toFixed(2)}
-                                                                </span>
-                                                            </div>
-                                                        </div>
+                                {/* Results List - Grouped by File */}
+                                {fileGroups.length > 0 && (() => {
+                                    // Split into high-score and low-score groups
+                                    const highScoreGroups = fileGroups.filter(g => g.bestScore >= LOW_SCORE_THRESHOLD);
+                                    const lowScoreGroups = fileGroups.filter(g => g.bestScore < LOW_SCORE_THRESHOLD);
 
-                                                        {/* Show primary chunk snippet when not expanded */}
-                                                        {!isExpanded && primaryChunk.snippet && (
-                                                            <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-                                                                {primaryChunk.snippet}
-                                                            </p>
-                                                        )}
+                                    return (
+                                        <div className="space-y-3">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Results</h4>
+                                            <div className="space-y-2">
+                                                {highScoreGroups.map((group) => {
+                                                    const isExpanded = expandedFiles.has(group.fileId);
+                                                    const hasMultipleChunks = group.chunks.length > 1;
+                                                    const primaryChunk = group.chunks[0];
+                                                    const firstSeenMs = fileFirstSeenMs[group.fileId];
 
-                                                        {/* File Actions */}
-                                                        <div className="mt-2 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    onSelect(primaryChunk);
-                                                                }}
-                                                                className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground hover:bg-secondary/80 transition-colors"
-                                                            >
-                                                                <Eye className="h-3 w-3" />
-                                                                FOCUS
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    onOpen(primaryChunk);
-                                                                }}
-                                                                className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
-                                                            >
-                                                                <ExternalLink className="h-3 w-3" />
-                                                                OPEN
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Expanded Chunks */}
-                                                {isExpanded && hasMultipleChunks && (
-                                                    <div className="border-t bg-muted/20">
-                                                        {group.chunks.map((chunk, chunkIdx) => (
+                                                    return (
+                                                        <div
+                                                            key={group.fileId}
+                                                            className="rounded-lg border bg-card overflow-hidden transition-all hover:border-primary/50 hover:shadow-md"
+                                                        >
+                                                            {/* File Header */}
                                                             <div
-                                                                key={chunk.chunkId ?? chunkIdx}
-                                                                className="group flex items-start gap-3 px-4 py-3 border-b last:border-b-0 hover:bg-muted/30 transition-colors"
-                                                                onMouseEnter={() => setHoveredHit(chunk)}
+                                                                className="group flex items-start gap-3 p-4 cursor-pointer"
+                                                                onClick={() => hasMultipleChunks && toggleFileExpanded(group.fileId)}
+                                                                onMouseEnter={() => setHoveredHit(primaryChunk)}
                                                                 onMouseLeave={() => setHoveredHit(null)}
                                                             >
-                                                                {/* Chunk indicator */}
+                                                                {/* Expand/Collapse Icon */}
                                                                 <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center mt-0.5">
-                                                                    <span className="text-[10px] font-mono text-muted-foreground">
-                                                                        #{chunkIdx + 1}
-                                                                    </span>
+                                                                    {hasMultipleChunks ? (
+                                                                        isExpanded ? (
+                                                                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                                        ) : (
+                                                                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                                        )
+                                                                    ) : (
+                                                                        <FileText className="h-4 w-4 text-muted-foreground" />
+                                                                    )}
                                                                 </div>
 
-                                                                {/* Chunk Content */}
+                                                                {/* File Info */}
                                                                 <div className="flex-1 min-w-0">
-                                                                    <div className="flex items-center justify-between gap-2 mb-1">
-                                                                        <span className="text-[10px] text-muted-foreground font-mono">
-                                                                            Chunk {chunk.chunkId?.slice(-8) || chunkIdx + 1}
-                                                                        </span>
-                                                                        <span className="shrink-0 text-[10px] text-muted-foreground font-mono">
-                                                                            {chunk.score.toFixed(2)}
-                                                                        </span>
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <div className="flex items-center gap-2 min-w-0">
+                                                                            {hasMultipleChunks && <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                                                                            <span className="truncate font-medium text-sm text-foreground">
+                                                                                {group.fileName}
+                                                                            </span>
+                                                                            {hasMultipleChunks && (
+                                                                                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                                                                    <Layers className="h-3 w-3" />
+                                                                                    {group.chunks.length}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2 shrink-0">
+                                                                            {typeof firstSeenMs === 'number' && (
+                                                                                <span className="text-[10px] text-muted-foreground/60 font-mono">
+                                                                                    {(firstSeenMs / 1000).toFixed(2)}s
+                                                                                </span>
+                                                                            )}
+                                                                            <span className="text-[10px] text-muted-foreground font-mono">
+                                                                                {group.bestScore.toFixed(2)}
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
-                                                                    {chunk.snippet && (
-                                                                        <p className="line-clamp-2 text-xs text-muted-foreground">
-                                                                            {chunk.snippet}
-                                                                        </p>
+
+                                                                    {/* Show primary chunk snippet when not expanded */}
+                                                                    {!isExpanded && primaryChunk.snippet && (
+                                                                        <div className="mt-2">
+                                                                            {(() => {
+                                                                                const pageNum = getPageNumber(primaryChunk);
+                                                                                return pageNum ? (
+                                                                                    <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium text-primary mr-2 mb-1">
+                                                                                        Page {pageNum}
+                                                                                    </span>
+                                                                                ) : null;
+                                                                            })()}
+                                                                            <p className="line-clamp-2 text-xs text-muted-foreground">
+                                                                                {primaryChunk.snippet}
+                                                                            </p>
+                                                                        </div>
                                                                     )}
 
-                                                                    {/* Chunk Actions */}
+                                                                    {/* File Actions */}
                                                                     <div className="mt-2 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                                                                         <button
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
-                                                                                onSelect(chunk);
+                                                                                onSelect(primaryChunk);
                                                                             }}
-                                                                            className="inline-flex items-center gap-1 rounded bg-secondary/80 px-2 py-1 text-[10px] font-medium text-secondary-foreground hover:bg-secondary transition-colors"
+                                                                            className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground hover:bg-secondary/80 transition-colors"
                                                                         >
-                                                                            <Eye className="h-2.5 w-2.5" />
+                                                                            <Eye className="h-3 w-3" />
                                                                             FOCUS
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                onOpen(primaryChunk);
+                                                                            }}
+                                                                            className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+                                                                        >
+                                                                            <ExternalLink className="h-3 w-3" />
+                                                                            OPEN
                                                                         </button>
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
 
-                                    {/* Low score results - collapsed */}
-                                    {lowScoreGroups.length > 0 && (
-                                        <details className="mt-4">
-                                            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors py-2 flex items-center gap-2">
-                                                <ChevronRight className="h-3 w-3 details-open:rotate-90 transition-transform" />
-                                                {lowScoreGroups.length} low relevance result{lowScoreGroups.length === 1 ? '' : 's'}
-                                            </summary>
-                                            <div className="mt-2 space-y-2 opacity-60">
-                                                {lowScoreGroups.map((group) => {
-                                                    const primaryChunk = group.chunks[0];
-                                                    const firstSeenMs = fileFirstSeenMs[group.fileId];
-                                                    
-                                                    return (
-                                                        <div
-                                                            key={group.fileId}
-                                                            className="rounded-lg border bg-card/50 p-3 transition-all hover:bg-card"
-                                                            onMouseEnter={() => setHoveredHit(primaryChunk)}
-                                                            onMouseLeave={() => setHoveredHit(null)}
-                                                        >
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <div className="flex items-center gap-2 min-w-0">
-                                                                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                                                    <span className="truncate text-xs text-foreground">
-                                                                        {group.fileName}
-                                                                    </span>
+                                                            {/* Expanded Chunks */}
+                                                            {isExpanded && hasMultipleChunks && (
+                                                                <div className="border-t bg-muted/20">
+                                                                    {group.chunks.map((chunk, chunkIdx) => (
+                                                                        <div
+                                                                            key={chunk.chunkId ?? chunkIdx}
+                                                                            className="group flex items-start gap-3 px-4 py-3 border-b last:border-b-0 hover:bg-muted/30 transition-colors"
+                                                                            onMouseEnter={() => setHoveredHit(chunk)}
+                                                                            onMouseLeave={() => setHoveredHit(null)}
+                                                                        >
+                                                                            {/* Chunk indicator */}
+                                                                            <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center mt-0.5">
+                                                                                <span className="text-[10px] font-mono text-muted-foreground">
+                                                                                    #{chunkIdx + 1}
+                                                                                </span>
+                                                                            </div>
+
+                                                                            {/* Chunk Content */}
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex items-center justify-between gap-2 mb-1">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="text-[10px] text-muted-foreground font-mono">
+                                                                                            Chunk {chunk.chunkId?.slice(-8) || chunkIdx + 1}
+                                                                                        </span>
+                                                                                        {(() => {
+                                                                                            const pageNum = getPageNumber(chunk);
+                                                                                            return pageNum ? (
+                                                                                                <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium text-primary">
+                                                                                                    P.{pageNum}
+                                                                                                </span>
+                                                                                            ) : null;
+                                                                                        })()}
+                                                                                    </div>
+                                                                                    <span className="shrink-0 text-[10px] text-muted-foreground font-mono">
+                                                                                        {chunk.score.toFixed(2)}
+                                                                                    </span>
+                                                                                </div>
+                                                                                {chunk.snippet && (
+                                                                                    <p className="line-clamp-2 text-xs text-muted-foreground">
+                                                                                        {chunk.snippet}
+                                                                                    </p>
+                                                                                )}
+
+                                                                                {/* Chunk Actions */}
+                                                                                <div className="mt-2 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                                                                    <button
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            onSelect(chunk);
+                                                                                        }}
+                                                                                        className="inline-flex items-center gap-1 rounded bg-secondary/80 px-2 py-1 text-[10px] font-medium text-secondary-foreground hover:bg-secondary transition-colors"
+                                                                                    >
+                                                                                        <Eye className="h-2.5 w-2.5" />
+                                                                                        FOCUS
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
-                                                                <div className="flex items-center gap-2 shrink-0">
-                                                                    {typeof firstSeenMs === 'number' && (
-                                                                        <span className="text-[9px] text-muted-foreground/50 font-mono">
-                                                                            {(firstSeenMs / 1000).toFixed(2)}s
-                                                                        </span>
-                                                                    )}
-                                                                    <span className="text-[9px] text-muted-foreground/70 font-mono">
-                                                                        {group.bestScore.toFixed(2)}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
+                                                            )}
                                                         </div>
                                                     );
                                                 })}
+
+                                                {/* Low score results - collapsed */}
+                                                {lowScoreGroups.length > 0 && (
+                                                    <details className="mt-4">
+                                                        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors py-2 flex items-center gap-2">
+                                                            <ChevronRight className="h-3 w-3 details-open:rotate-90 transition-transform" />
+                                                            {lowScoreGroups.length} low relevance result{lowScoreGroups.length === 1 ? '' : 's'}
+                                                        </summary>
+                                                        <div className="mt-2 space-y-2 opacity-60">
+                                                            {lowScoreGroups.map((group) => {
+                                                                const primaryChunk = group.chunks[0];
+                                                                const firstSeenMs = fileFirstSeenMs[group.fileId];
+
+                                                                return (
+                                                                    <div
+                                                                        key={group.fileId}
+                                                                        className="rounded-lg border bg-card/50 p-3 transition-all hover:bg-card"
+                                                                        onMouseEnter={() => setHoveredHit(primaryChunk)}
+                                                                        onMouseLeave={() => setHoveredHit(null)}
+                                                                    >
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                                                                <span className="truncate text-xs text-foreground">
+                                                                                    {group.fileName}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                                {typeof firstSeenMs === 'number' && (
+                                                                                    <span className="text-[9px] text-muted-foreground/50 font-mono">
+                                                                                        {(firstSeenMs / 1000).toFixed(2)}s
+                                                                                    </span>
+                                                                                )}
+                                                                                <span className="text-[9px] text-muted-foreground/70 font-mono">
+                                                                                    {group.bestScore.toFixed(2)}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </details>
+                                                )}
                                             </div>
-                                        </details>
-                                    )}
-                                </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
-                            );
-                        })()}
-                    </div>
                         </>
                     )}
 
@@ -923,7 +1011,7 @@ export function QuickSearchPalette({
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 }
 

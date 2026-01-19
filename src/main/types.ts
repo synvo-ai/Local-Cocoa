@@ -11,7 +11,7 @@ export interface IndexOperationOptions {
     refreshEmbeddings?: boolean;
     dropCollection?: boolean;
     purgeFolders?: string[];
-    indexing_mode?: 'fast' | 'fine';
+    indexing_mode?: 'fast' | 'deep';
 }
 
 export type FileKind = import('../types/files').FileKind;
@@ -32,6 +32,11 @@ export type HealthStatus = import('../types/files').HealthStatus;
 export type SearchHit = import('../types/files').SearchHit;
 export type SearchResponse = import('../types/files').SearchResponse;
 export type QaResponse = import('../types/files').QaResponse;
+export type EmailAccountPayload = import('../types/files').EmailAccountPayload;
+export type EmailAccountSummary = import('../types/files').EmailAccountSummary;
+export type EmailSyncResult = import('../types/files').EmailSyncResult;
+export type EmailMessageSummary = import('../types/files').EmailMessageSummary;
+export type EmailMessageContent = import('../types/files').EmailMessageContent;
 export type NoteSummary = import('../types/files').NoteSummary;
 export type NoteContent = import('../types/files').NoteContent;
 export type NoteDraftPayload = import('../types/files').NoteDraftPayload;

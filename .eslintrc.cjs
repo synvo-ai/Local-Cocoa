@@ -33,10 +33,11 @@ module.exports = {
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/ban-ts-comment': 'off',
         '@typescript-eslint/no-unused-vars': [
-            'warn',
+            'error',
             {
                 argsIgnorePattern: '^_',
-                varsIgnorePattern: '^_'
+                varsIgnorePattern: '^_',
+                ignoreRestSiblings: true
             }
         ]
     }

@@ -17,6 +17,13 @@ if (process.platform === 'darwin') {
 // Load environment variables first before loading other modules (works in both dev and prod)
 loadEnvConfig();
 
+// Modify userData path for development, keep using the local project folder for convenience
+if (config.isDev) {
+    const devUserDataPath = path.join(config.projectRoot, 'runtime');
+    app.setPath('userData', devUserDataPath);
+    console.log(`[Main] Dev mode: userData path set to ${devUserDataPath}`);
+}
+
 import './logger'; // Initialize logger
 import { WindowManager } from './windowManager';
 import { ServiceManager } from './serviceManager';
@@ -25,13 +32,16 @@ import { PythonServer } from './pythonServer';
 import { TrayManager } from './trayManager';
 import { setDebugMode, createDebugLogger } from './debug';
 import { registerFileHandlers } from './ipc/files';
+import { registerEmailHandlers } from './ipc/email';
 import { registerNotesHandlers } from './ipc/notes';
 import { registerChatHandlers } from './ipc/chat';
 import { registerActivityHandlers } from './ipc/activity';
 import { registerModelHandlers } from './ipc/models';
 import { registerSystemHandlers } from './ipc/system';
 import { registerScanHandlers } from './ipc/scan';
+import { registerMemoryHandlers } from './ipc/memory';
 import { registerMCPHandlers, initMCPServer } from './ipc/mcp';
+import { initPluginManager, getPluginManager } from './plugins';
 import { ModelDownloadEvent } from './types';
 
 process.on('uncaughtException', (error) => {
@@ -48,21 +58,28 @@ const serviceManager = new ServiceManager(config.projectRoot);
 const pythonServer = new PythonServer();
 let trayManager: TrayManager | null = null;
 
+// Initialize plugin manager
+const pluginManager = initPluginManager(config.projectRoot);
+
 function broadcastModelEvent(event: ModelDownloadEvent) {
     windowManager.broadcast('models:progress', event);
 }
 
 modelManager.on('event', (event: ModelDownloadEvent) => {
     broadcastModelEvent(event);
+    if (event.state === 'completed') {
+        console.log('[Main] Model download completed. Retrying service startup...');
+        startServices().catch(console.error);
+    }
 });
 
 async function startServices() {
     await modelManager.initializePromise;
     const modelConfig = await modelManager.getConfig();
-    
+
     // Initialize debug mode from config
     setDebugMode(modelConfig.debugMode ?? false);
-    
+
     const debugLog = createDebugLogger('Main');
     debugLog('startServices() called');
     debugLog(`app.isPackaged: ${app.isPackaged}, isDev: ${config.isDev}`);
@@ -111,15 +128,25 @@ async function startServices() {
     try {
         const embeddingModelId = modelConfig.activeEmbeddingModelId || 'embedding-q4';
         console.log('[Main] Starting embedding with model:', embeddingModelId);
+
+        // Fixed embedding server config - benchmark showed minimal impact from tuning
+        // Using economical defaults that work well across all configurations
         await serviceManager.startService({
             alias: 'embedding',
             modelPath: modelManager.getModelPath(embeddingModelId),
             port: config.ports.embedding,
             contextSize: 8192,
-            threads: 2,
+            threads: 4,         // Increased for parallel request handling
             ngl: 999,
-            type: 'embedding'
+            type: 'embedding',
+            batchSize: 8192,    // Max prompt length (tokens)
+            ubatchSize: 512,    // Micro-batch for GPU processing
+            parallel: 4         // 4 slots for parallel embedding requests
         });
+
+
+
+
     } catch (err) {
         console.error('Failed to start Embedding service:', err);
     }
@@ -141,23 +168,65 @@ async function startServices() {
     } catch (err) {
         console.error('Failed to start Reranker service:', err);
     }
+
+    // Start Whisper
+    try {
+        // Use configured audio model (can be changed in settings)
+        // Available: whisper-base (English only), whisper-small (multi-language), whisper-large-v3-turbo (best quality)
+        const whisperModelId = modelConfig.activeAudioModelId || 'whisper-small';
+
+        console.log('[Main] Starting whisper with model:', whisperModelId);
+        await serviceManager.startService({
+            alias: 'whisper',
+            modelPath: modelManager.getModelPath(whisperModelId),
+            port: config.ports.whisper,
+            contextSize: 0,
+            threads: 4,
+            ngl: 0,
+            type: 'whisper'
+        });
+    } catch (err) {
+        console.error('Failed to start Whisper service:', err);
+    }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
     if (process.platform === 'darwin') {
         const iconPath = path.join(config.projectRoot, 'assets', 'icon.png');
         app.dock.setIcon(nativeImage.createFromPath(iconPath));
     }
 
     windowManager.createApplicationMenu();
+
+    // Start backend services FIRST, then create window
+    // This ensures API key is available before frontend makes requests
+    try {
+        await startServices();
+    } catch (error) {
+        console.error('Failed to start services:', error);
+    }
+
     windowManager.createMainWindow().catch((error) => {
         console.error('Failed to create window', error);
     });
 
-    startServices().catch(console.error);
-
     windowManager.registerSpotlightShortcut();
     windowManager.registerQuickNoteShortcut();
+
+    // Initialize plugin system
+    try {
+        await pluginManager.initialize();
+        pluginManager.registerIPCHandlers();
+
+        // Set main window reference for plugin notifications
+        if (windowManager.mainWindow) {
+            pluginManager.setMainWindow(windowManager.mainWindow);
+        }
+
+        console.log('[Main] Plugin system initialized');
+    } catch (error) {
+        console.error('[Main] Failed to initialize plugin system:', error);
+    }
 
     // Create system tray
     trayManager = new TrayManager(windowManager);
@@ -206,12 +275,14 @@ app.on('before-quit', async (event) => {
 
 // Register IPC Handlers
 registerFileHandlers(windowManager);
+registerEmailHandlers();
 registerNotesHandlers();
 registerChatHandlers();
 registerActivityHandlers();
 registerModelHandlers(modelManager, serviceManager);
 registerSystemHandlers(windowManager);
 registerScanHandlers();
+registerMemoryHandlers();
 registerMCPHandlers();
 
 // Initialize MCP server (for Claude Desktop integration)

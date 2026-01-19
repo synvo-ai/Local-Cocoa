@@ -1,0 +1,143 @@
+{
+  "app": {
+    "name": "Local Cocoa",
+    "tagline": "Votre espace de travail IA privé"
+  },
+  "common": {
+    "search": "Rechercher",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "close": "Fermer",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "confirm": "Confirmer",
+    "back": "Retour",
+    "next": "Suivant",
+    "finish": "Terminer",
+    "settings": "Paramètres",
+    "language": "Langue"
+  },
+  "startup": {
+    "connecting": "Connexion aux services...",
+    "startingBackend": "Démarrage des services backend...",
+    "modelsReady": "Modèles prêts",
+    "welcome": "Bienvenue sur Local Cocoa"
+  },
+  "onboarding": {
+    "welcome": "Bienvenue !",
+    "welcomeDescription": "Votre espace de travail IA privé qui fonctionne entièrement sur votre appareil. Vos données ne quittent jamais votre machine.",
+    "private": "100% Privé",
+    "runsLocally": "Exécution locale",
+    "allYourFiles": "Tous vos fichiers",
+    "aiPowered": "Alimenté par l'IA",
+    "downloadModels": "Téléchargement des modèles IA",
+    "downloadDescription": "Détendez-vous pendant que nous téléchargeons les modèles IA. Cela ne se produit qu'une seule fois.",
+    "allSet": "Tout est prêt !",
+    "allSetDescription": "Tous les modèles IA sont prêts. Vous pouvez maintenant utiliser Local Cocoa à son plein potentiel."
+  },
+  "chat": {
+    "title": "Interrogez votre espace de travail",
+    "placeholder": "Tapez votre message...",
+    "howCanIHelp": "Comment puis-je vous aider aujourd'hui ?",
+    "helpDescription": "Je peux vous aider à rechercher, analyser et résumer vos documents d'espace de travail.",
+    "newConversation": "Nouvelle conversation",
+    "resetConversation": "Réinitialiser la conversation"
+  },
+  "knowledge": {
+    "title": "Base de connaissances",
+    "folders": "Dossiers",
+    "files": "Fichiers",
+    "addFolder": "Ajouter un dossier",
+    "addFile": "Ajouter un fichier",
+    "removeFolder": "Supprimer le dossier",
+    "rescanFolder": "Rescanner",
+    "reindexFolder": "Réindexer",
+    "indexed": "indexé",
+    "pending": "en attente"
+  },
+  "search": {
+    "searching": "Recherche en cours...",
+    "searchComplete": "Recherche terminée",
+    "noResults": "Aucun résultat trouvé",
+    "stages": {
+      "filename": "Recherche de noms de fichiers...",
+      "summary": "Recherche de résumés...",
+      "metadata": "Recherche de métadonnées...",
+      "hybrid": "Recherche sémantique approfondie...",
+      "complete": "Recherche terminée"
+    }
+  },
+  "indexing": {
+    "indexing": "Indexation...",
+    "paused": "En pause",
+    "starting": "Démarrage...",
+    "scanning": "Analyse...",
+    "processing": "Traitement...",
+    "fastMode": "Mode rapide",
+    "deepMode": "Mode approfondi",
+    "pause": "Pause",
+    "resume": "Reprendre",
+    "stop": "Arrêter"
+  },
+  "models": {
+    "title": "Gestion des modèles",
+    "activeModel": "Modèle actif",
+    "availableModels": "Modèles disponibles",
+    "downloadModel": "Télécharger le modèle",
+    "modelSettings": "Paramètres du modèle",
+    "contextSize": "Taille du contexte",
+    "visionPerformance": "Performance de vision",
+    "maxResolution": "Résolution maximale"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "subtitle": "Gérer les préférences de l'application",
+    "general": "Général",
+    "models": "Modèles",
+    "retrievalIndexing": "Récupération et indexation",
+    "security": "Sécurité",
+    "scanScope": "Portée du scan",
+    "plugins": "Plugins",
+    "language": "Langue",
+    "languageDescription": "Choisissez votre langue préférée",
+    "theme": "Thème",
+    "appearance": "Apparence",
+    "skin": "Habillage",
+    "skinDescription": "Choisissez un style visuel pour l'interface",
+    "systemHealth": "État du système",
+    "light": "Clair",
+    "dark": "Sombre",
+    "system": "Système",
+    "diagnostics": "Diagnostics et support"
+  },
+  "notifications": {
+    "contextTooLarge": "Cette requête est trop volumineuse pour la fenêtre de contexte du modèle. Essayez de réduire la performance de vision (résolution maximale) ou d'augmenter la taille du contexte dans les modèles.",
+    "folderAdded": "Dossier ajouté avec succès",
+    "folderRemoved": "Dossier supprimé avec succès",
+    "indexingStarted": "Indexation démarrée",
+    "indexingComplete": "Indexation terminée",
+    "errorOccurred": "Une erreur s'est produite"
+  },
+  "extensions": {
+    "title": "Extensions",
+    "plugins": "Plugins",
+    "email": "Email",
+    "notes": "Notes",
+    "activity": "Activité"
+  },
+  "scan": {
+    "title": "Analyse rapide",
+    "description": "Analyser les fichiers par date de modification"
+  },
+  "mbti": {
+    "title": "Analyse MBTI",
+    "startAnalysis": "Démarrer l'analyse",
+    "stopAnalysis": "Arrêter l'analyse",
+    "analyzing": "Analyse en cours...",
+    "generatingReport": "Génération du rapport..."
+  }
+}
+

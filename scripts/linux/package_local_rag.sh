@@ -16,7 +16,7 @@ run_with_spinner() {
     return
   fi
 
-  local spinner='|/-\\'
+  local spinner='|/-\'
   local i=0
 
   echo "${label}..."
@@ -47,19 +47,19 @@ run_with_spinner() {
   return "$cmd_status"
 }
 
-# Packages the local_rag_agent service into runtime/local_rag_dist using PyInstaller.
+# Packages the backend services into runtime/local_rag_dist using PyInstaller.
 # This creates a standalone executable that doesn't require Python to be installed.
 ROOT_DIR=$1
 
-SOURCE_DIR="${ROOT_DIR}/services/local_rag_agent"
+SERVICES_DIR="${ROOT_DIR}/services"
 DIST_DIR="${ROOT_DIR}/runtime/local_rag_dist"
 BUILD_DIR="${ROOT_DIR}/build/pyinstaller"
 REQUESTED_PYTHON_VERSION="${PYTHON_VERSION:-3.11.11}"
 REQUESTED_PYTHON_BIN="${PYTHON_BIN:-}"
-PACKAGE_NAME="local_rag_agent"
+PACKAGE_NAME="services"
 
-if [ ! -d "${SOURCE_DIR}" ]; then
-  echo "Source package not found: ${SOURCE_DIR}" >&2
+if [ ! -d "${SERVICES_DIR}" ]; then
+  echo "Services directory not found: ${SERVICES_DIR}" >&2
   exit 1
 fi
 
@@ -115,11 +115,12 @@ VENV_PIP="${VENV_DIR}/bin/pip"
 # Install dependencies + PyInstaller
 echo "Installing dependencies..."
 "${VENV_PY}" -m pip install --upgrade pip wheel
-"${VENV_PIP}" install -r "${SOURCE_DIR}/requirements.txt"
+"${VENV_PIP}" install -r "${SERVICES_DIR}/app/requirements.txt"
 "${VENV_PIP}" install pyinstaller
 
 # Copy source files to build directory
 echo "Preparing source files..."
+mkdir -p "${BUILD_DIR}/services"
 rsync -a \
   --exclude "__pycache__" \
   --exclude "*.pyc" \
@@ -127,10 +128,24 @@ rsync -a \
   --exclude ".pytest_cache" \
   --exclude ".DS_Store" \
   --exclude "*.spec" \
-  "${SOURCE_DIR}/" "${BUILD_DIR}/${PACKAGE_NAME}/"
+  "${SERVICES_DIR}/" "${BUILD_DIR}/services/"
+
+# Copy plugins directory to build directory as well (for relative path resolution in context.py)
+PLUGINS_DIR="${ROOT_DIR}/plugins"
+if [ -d "${PLUGINS_DIR}" ]; then
+  echo "Copying plugins to build directory..."
+  mkdir -p "${BUILD_DIR}/plugins"
+  rsync -a \
+    --exclude "__pycache__" \
+    --exclude "*.pyc" \
+    --exclude ".DS_Store" \
+    --exclude ".pytest_cache" \
+    "${PLUGINS_DIR}/" "${BUILD_DIR}/plugins/"
+fi
+
 
 # Copy main.py entry point
-cp "${SOURCE_DIR}/main.py" "${BUILD_DIR}/main.py"
+cp "${SERVICES_DIR}/app/main.py" "${BUILD_DIR}/main.py"
 
 # Run PyInstaller
 echo "Running PyInstaller (this may take several minutes)..."
@@ -154,7 +169,7 @@ cd "${BUILD_DIR}"
   --collect-all onnxruntime \
   --collect-all langdetect \
   --collect-all certifi \
-  --collect-all local_rag_agent \
+  --collect-all services \
   --collect-all magika \
   --collect-all markitdown \
   --collect-all grpcio \
@@ -179,12 +194,16 @@ cd "${BUILD_DIR}"
   --hidden-import msal_extensions \
   --hidden-import azure.identity \
   --hidden-import msgraph \
+  --hidden-import onnx \
+  --hidden-import email \
   --exclude-module tkinter \
   --exclude-module matplotlib \
   --exclude-module scipy \
   --exclude-module pandas \
   --exclude-module torch \
   --exclude-module tensorflow \
+  --paths "${BUILD_DIR}" \
+  --paths "${BUILD_DIR}/plugins" \
   main.py
 
 cd "${ROOT_DIR}"

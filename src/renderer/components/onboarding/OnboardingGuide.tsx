@@ -8,7 +8,7 @@ interface OnboardingGuideProps {
     isOpen: boolean;
     onClose: () => void;
     onComplete: () => void;
-    onNavigate: (view: 'chat' | 'knowledge' | 'models' | 'settings' | 'activity') => void;
+    onNavigate: (view: 'chat' | 'knowledge' | 'models' | 'settings' | 'extensions') => void;
     modelsReady?: boolean;
     onDownloadModels?: () => void;
     modelDownloadEvent?: ModelDownloadEvent | null;
@@ -73,7 +73,7 @@ export function OnboardingGuide({
                         </div>
                     </div>
                     <p className="text-center text-xs pt-2">
-                        Let's get you set up in just a few steps.
+                        Let&apos;s get you set up in just a few steps.
                     </p>
                 </div>
             ),
@@ -150,6 +150,13 @@ export function OnboardingGuide({
                         </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 border rounded bg-card">
+                        <Mail className="h-5 w-5 text-red-500" />
+                        <div>
+                            <div className="font-medium">Email Accounts</div>
+                            <div className="text-xs text-muted-foreground">Connect IMAP accounts</div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 border rounded bg-card">
                         <FileText className="h-5 w-5 text-yellow-500" />
                         <div>
                             <div className="font-medium">Notes</div>
@@ -162,20 +169,20 @@ export function OnboardingGuide({
             action: { label: 'Configure Knowledge', view: 'knowledge' as const }
         },
         {
-            id: 'activity',
-            title: 'Activity Tracking',
-            description: 'Optionally track your screen activity to create a searchable timeline of your work.',
+            id: 'extensions',
+            title: 'Extensions',
+            description: 'Explore installed extensions like Activity Tracking, Email, and Notes.',
             content: (
                 <div className="space-y-2 text-sm text-muted-foreground">
-                    <p>Enable this in the <strong>Activity</strong> tab.</p>
+                    <p>Go to the <strong>Extensions</strong> tab to access all your installed plugins.</p>
                     <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
                         <Activity className="h-5 w-5 text-green-500" />
-                        <span>Screenshots are stored locally and processed for text content.</span>
+                        <span>Track activity, connect emails, and manage notes in one place.</span>
                     </div>
                 </div>
             ),
             icon: <ActivityIcon className="h-8 w-8 text-green-500" />,
-            action: { label: 'Go to Activity', view: 'activity' as const }
+            action: { label: 'Go to Extensions', view: 'extensions' as const }
         },
         {
             id: 'shortcuts',
@@ -229,8 +236,8 @@ export function OnboardingGuide({
                     onClick={onClose}
                     className={cn(
                         "absolute right-4 top-4 z-10 rounded-full p-1.5 transition-all focus:outline-none focus:ring-2 focus:ring-ring",
-                        step.id === 'welcome' 
-                            ? "bg-black/30 hover:bg-black/50 text-white backdrop-blur-sm" 
+                        step.id === 'welcome'
+                            ? "bg-black/30 hover:bg-black/50 text-white backdrop-blur-sm"
                             : "opacity-70 hover:opacity-100"
                     )}
                 >
@@ -242,9 +249,9 @@ export function OnboardingGuide({
                     {/* Header Image/Icon Area */}
                     {step.id === 'welcome' ? (
                         <div className="shrink-0 w-full overflow-hidden" style={{ height: '200px' }}>
-                            <img 
-                                src={bannerImage} 
-                                alt="Local Cocoa - Your Private File Caretaker" 
+                            <img
+                                src={bannerImage}
+                                alt="Local Cocoa - Your Private File Caretaker"
                                 className="w-full h-full object-cover object-center"
                             />
                         </div>
