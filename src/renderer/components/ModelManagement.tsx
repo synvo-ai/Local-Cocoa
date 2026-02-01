@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, CSSProperties } from 'react';
-import { Download, Check, AlertCircle, Cpu, HardDrive, Box, RotateCcw, Activity, Save, CheckCircle2 } from 'lucide-react';
-import { useModelStatus } from '../hooks/useModelStatus';
+import { Download, Check, AlertCircle, HardDrive, Box, RotateCcw, Activity, Power, PlayCircle } from 'lucide-react';
+import { useModelStatus, type ModelRuntimeStatus } from '../hooks/useModelStatus';
 import { useModelConfig } from '../hooks/useModelConfig';
 import { useWorkspaceData } from '../hooks/useWorkspaceData';
 import { cn } from '../lib/utils';
@@ -61,8 +61,8 @@ function groupAssets(assets: ModelAssetStatus[]): ModelGroup[] {
 }
 
 export function ModelManagement() {
-    const { modelStatus, handleManualModelDownload, handleRedownloadModel, modelDownloadEvent } = useModelStatus();
-    const { config, loading, updateConfig } = useModelConfig();
+    const { modelStatus, handleManualModelDownload, handleRedownloadModel, modelDownloadEvent, runtimeStatus, refreshRuntimeStatus } = useModelStatus();
+    const { config, loading: _loading, updateConfig } = useModelConfig();
     const { health, systemSpecs } = useWorkspaceData();
 
     const dragStyle = { WebkitAppRegion: 'drag' } as CSSProperties;
@@ -81,12 +81,12 @@ export function ModelManagement() {
         }
     }
 
-    const rangeClassName =
+    const _rangeClassName =
         'h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2';
-    
+
     // State for save success message
-    const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-    
+    const [_showSaveSuccess, setShowSaveSuccess] = useState(false);
+
     const allowedContextSizes = useMemo(() => {
         return [2048, 4096, 8192, 16384, 32768].filter((value) => value <= maxAllowedContext);
     }, [maxAllowedContext]);
@@ -104,12 +104,12 @@ export function ModelManagement() {
     const discreteSearchLimits = useMemo(() => [9, 15, 30, 60], []);
     const discreteSnippetLengths = useMemo(() => [1000, 2000, 4000, 8000], []);
 
-    const [contextSizeIdx, setContextSizeIdx] = useState(0);
-    const [visionIdx, setVisionIdx] = useState(2);
+    const [_contextSizeIdx, setContextSizeIdx] = useState(0);
+    const [_visionIdx, setVisionIdx] = useState(2);
     const [qaContextLimitDraft, setQaContextLimitDraft] = useState(5);
-    const [summaryTokensIdx, setSummaryTokensIdx] = useState(1);
-    const [searchLimitIdx, setSearchLimitIdx] = useState(1);
-    const [snippetLengthIdx, setSnippetLengthIdx] = useState(1);
+    const [_summaryTokensIdx, setSummaryTokensIdx] = useState(1);
+    const [_searchLimitIdx, setSearchLimitIdx] = useState(1);
+    const [_snippetLengthIdx, setSnippetLengthIdx] = useState(1);
 
     const [embedBatchSizeDraft, setEmbedBatchSizeDraft] = useState(10);
     const [embedBatchDelayDraft, setEmbedBatchDelayDraft] = useState(10);
@@ -191,7 +191,7 @@ export function ModelManagement() {
 
     const handleContextSizeChange = (newSize: number) => {
         let recommendedPixels = 1003520; // Default High (1280x720)
-        
+
         if (newSize <= 2048) {
             recommendedPixels = 200704; // Low (448x448)
         } else if (newSize <= 4096) {
@@ -200,11 +200,85 @@ export function ModelManagement() {
             recommendedPixels = 1003520; // High (1280x720)
         }
 
-        updateConfig({ 
+        updateConfig({
             contextSize: newSize,
             visionMaxPixels: recommendedPixels
         });
     };
+
+    const formatDuration = (seconds: number | null | undefined) => {
+        if (seconds == null) return null;
+        if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s`;
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.max(0, Math.round(seconds - minutes * 60));
+        return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+    };
+
+    // Get active model label for each service type
+    const getActiveModelLabel = useCallback((key: 'embedding' | 'rerank' | 'vision' | 'whisper'): string | null => {
+        if (!config || !modelStatus?.assets) return null;
+        
+        let activeId: string | undefined;
+        switch (key) {
+            case 'embedding':
+                activeId = config.activeEmbeddingModelId;
+                break;
+            case 'rerank':
+                activeId = config.activeRerankerModelId;
+                break;
+            case 'vision':
+                activeId = config.activeModelId;
+                break;
+            case 'whisper':
+                activeId = config.activeAudioModelId;
+                break;
+        }
+        
+        if (!activeId) return null;
+        
+        const asset = modelStatus.assets.find(a => a.id === activeId);
+        return asset?.label ?? activeId;
+    }, [config, modelStatus?.assets]);
+
+    const mergedServices = useMemo(() => {
+        const runtimeLabels: Record<keyof ModelRuntimeStatus, string> = {
+            embedding: 'Embedding',
+            rerank: 'Reranker',
+            vision: 'Vision/LLM',
+            whisper: 'Whisper'
+        };
+
+        const normalizeKey = (name: string): keyof ModelRuntimeStatus | null => {
+            const lower = name.toLowerCase();
+            if (lower.includes('embed')) return 'embedding';
+            if (lower.includes('rerank') || lower.includes('rank')) return 'rerank';
+            if (lower.includes('vision') || lower.includes('vlm') || lower.includes('llm')) return 'vision';
+            if (lower.includes('whisper') || lower.includes('audio') || lower.includes('transcri')) return 'whisper';
+            return null;
+        };
+
+        const list = (health?.services ?? []).map((service) => {
+            const key = normalizeKey(service.name);
+            const runtimeState = key ? runtimeStatus?.[key] : undefined;
+            return { ...service, key, runtimeState } as const;
+        });
+
+        (['embedding', 'rerank', 'vision', 'whisper'] as const).forEach((key) => {
+            const exists = list.some((item) => item.key === key);
+            if (!exists) {
+                list.push({
+                    name: runtimeLabels[key],
+                    status: 'offline',
+                    latencyMs: 0,
+                    details: 'Idle',
+                    key,
+                    runtimeState: runtimeStatus?.[key]
+                });
+            }
+        });
+
+        return list;
+    }, [health?.services, runtimeStatus]);
 
     if (!modelStatus || !config) {
         return (
@@ -218,27 +292,27 @@ export function ModelManagement() {
     }
 
     const modelGroups = groupAssets(modelStatus.assets);
-    const vlmModels = modelStatus.assets.filter(a => a.id.includes('vlm') && !a.id.includes('mmproj'));
-    
+    const _vlmModels = modelStatus.assets.filter(a => a.id.includes('vlm') && !a.id.includes('mmproj'));
+
     // Get available embedding models (those that exist)
-    const embeddingModels = modelStatus.assets.filter(a => 
+    const embeddingModels = modelStatus.assets.filter(a =>
         a.id.includes('embedding') && a.exists
     );
     const currentEmbeddingModelId = config.activeEmbeddingModelId || 'embedding-q4';
 
-    const commitContextSize = (nextIdx: number) => {
+    const _commitContextSize = (nextIdx: number) => {
         const selected = allowedContextSizes[nextIdx];
         if (!selected || selected === config.contextSize) return;
         handleContextSizeChange(selected);
     };
 
-    const commitVisionMaxPixels = (nextIdx: number) => {
+    const _commitVisionMaxPixels = (nextIdx: number) => {
         const selected = visionOptions[nextIdx]?.value;
         if (!selected || selected === config.visionMaxPixels) return;
         updateConfig({ visionMaxPixels: selected });
     };
 
-    const commitDiscrete = (kind: 'summary' | 'search' | 'snippet', nextIdx: number) => {
+    const _commitDiscrete = (kind: 'summary' | 'search' | 'snippet', nextIdx: number) => {
         if (kind === 'summary') {
             const selected = discreteSummaryTokens[nextIdx];
             if (!selected || selected === config.summaryMaxTokens) return;
@@ -256,7 +330,18 @@ export function ModelManagement() {
         }
     };
 
-    const commitIndexingPerf = () => {
+    const toggleModel = async (modelType: string, currentState: string) => {
+        try {
+            const action = currentState === 'running' || currentState === 'starting' ? 'stop' : 'start';
+            await fetch(`http://127.0.0.1:8890/models/${modelType}/${action}`, { method: 'POST' });
+            // Optimistic update or wait for poll
+            refreshRuntimeStatus();
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const _commitIndexingPerf = () => {
         const next: Record<string, number> = {};
         if (embedBatchSizeDraft !== (config.embedBatchSize ?? 10)) next.embedBatchSize = embedBatchSizeDraft;
         if (embedBatchDelayDraft !== (config.embedBatchDelayMs ?? 10)) next.embedBatchDelayMs = embedBatchDelayDraft;
@@ -264,6 +349,7 @@ export function ModelManagement() {
         if (qaContextLimitDraft !== (config.qaContextLimit ?? 5)) next.qaContextLimit = qaContextLimitDraft;
         if (Object.keys(next).length) updateConfig(next as any);
     };
+
 
     return (
         <div className="flex h-full flex-col bg-background">
@@ -278,28 +364,79 @@ export function ModelManagement() {
                 <div className="space-y-4">
                     <h3 className="text-sm font-medium">System Health</h3>
                     <div className="rounded-lg border bg-card p-4 space-y-3">
-                        {health?.services?.map((service) => (
-                            <div key={service.name} className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Activity className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-sm font-medium">{service.name}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span
-                                        className={cn(
-                                            'h-2 w-2 rounded-full',
-                                            service.status === 'online' ? 'bg-emerald-500' : 'bg-red-500'
+                        {mergedServices.map((service) => {
+                            const runtimeEntry = service.runtimeState;
+                            const state = runtimeEntry?.state ?? service.status ?? 'stopped';
+                            const isOnline = runtimeEntry ? runtimeEntry.state === 'running' : service.status === 'online';
+                            const isStarting = runtimeEntry?.state === 'starting';
+                            const displayState = (() => {
+                                if (runtimeEntry) {
+                                    if (runtimeEntry.state === 'running') return 'Active';
+                                    if (runtimeEntry.state === 'starting') return 'Starting';
+                                    if (runtimeEntry.state === 'error') return 'Error';
+                                    return 'Hibernated';
+                                }
+                                if (service.status === 'online') return 'Online';
+                                if (service.status === 'offline') return 'Offline';
+                                return typeof state === 'string' ? state : 'Unknown';
+                            })();
+
+                            const detailText = runtimeEntry
+                                ? runtimeEntry.state === 'running'
+                                    ? runtimeEntry.idleSecondsRemaining != null
+                                        ? `Hibernates in ${formatDuration(runtimeEntry.idleSecondsRemaining)}`
+                                        : `${Math.round(service.latencyMs || 0)}ms`
+                                    : runtimeEntry.state === 'starting'
+                                        ? '...'
+                                        : '—'
+                                : service.status === 'online'
+                                    ? `${Math.round(service.latencyMs || 0)}ms`
+                                    : service.details || 'Offline';
+
+                            const activeModelLabel = service.key ? getActiveModelLabel(service.key) : null;
+
+                            return (
+                                <div key={service.name} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Activity className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-sm font-medium">{service.name}</span>
+                                        {activeModelLabel && (
+                                            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                                {activeModelLabel}
+                                            </span>
                                         )}
-                                    />
-                                    <span className="text-xs text-muted-foreground">
-                                        {service.status === 'online'
-                                            ? `${Math.round(service.latencyMs || 0)}ms`
-                                            : service.details || 'Offline'}
-                                    </span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2 px-2 py-1 rounded bg-muted/50">
+                                            <span
+                                                className={cn(
+                                                    'h-2 w-2 rounded-full',
+                                                    isOnline ? 'bg-emerald-500' : isStarting ? 'bg-amber-500 animate-pulse' : 'bg-red-500'
+                                                )}
+                                            />
+                                            <span className="text-xs text-muted-foreground">
+                                                {displayState}
+                                            </span>
+                                        </div>
+                                        {service.key && (
+                                            <button
+                                                onClick={() => toggleModel(service.key!, runtimeEntry?.state || 'stopped')}
+                                                disabled={isStarting || !runtimeStatus}
+                                                className={cn(
+                                                    'p-1 rounded-full hover:bg-muted transition-colors',
+                                                    isOnline ? 'text-red-500 hover:text-red-600' : 'text-green-500 hover:text-green-600',
+                                                    (!runtimeStatus || isStarting) && 'opacity-60 cursor-not-allowed'
+                                                )}
+                                            >
+                                                {isOnline ? <Power size={14} /> : <PlayCircle size={14} />}
+                                            </button>
+                                        )}
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">{detailText}</span>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                        {(!health?.services || health.services.length === 0) && (
+                            );
+                        })}
+                        {(!mergedServices || mergedServices.length === 0) && (
                             <div className="flex items-center justify-center py-2">
                                 <span className="text-xs text-muted-foreground">{health?.message || 'Checking services...'}</span>
                             </div>
@@ -331,16 +468,16 @@ export function ModelManagement() {
                                             }}
                                             className={cn(
                                                 "w-full flex items-center justify-between rounded-lg border p-3 transition-colors",
-                                                isActive 
-                                                    ? "border-primary bg-primary/5" 
+                                                isActive
+                                                    ? "border-primary bg-primary/5"
                                                     : "border-input hover:bg-muted/50"
                                             )}
                                         >
                                             <div className="flex items-center gap-3">
                                                 <div className={cn(
                                                     "h-3 w-3 rounded-full border-2",
-                                                    isActive 
-                                                        ? "border-primary bg-primary" 
+                                                    isActive
+                                                        ? "border-primary bg-primary"
                                                         : "border-muted-foreground"
                                                 )} />
                                                 <div className="text-left">
@@ -402,113 +539,113 @@ export function ModelManagement() {
                         </div>
 
                         <div className="space-y-6">
-                    {modelGroups.map((group) => (
-                        <div key={group.id} className="space-y-3">
-                            <div className="flex items-center gap-2 pb-2 border-b">
-                                <Box className="h-4 w-4 text-muted-foreground" />
-                                <h3 className="text-sm font-medium">{group.label}</h3>
-                                <div className={cn(
-                                    "ml-auto text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full",
-                                    group.ready ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
-                                )}>
-                                    {group.ready ? "Installed" : "Not Installed"}
-                                </div>
-                            </div>
-                            <div className="grid gap-3">
-                                {group.assets.map((asset) => {
-                                    const isDownloadingThis = isDownloading && modelDownloadEvent?.assetId === asset.id;
-                                    const disableRedownload = isDownloading && !isDownloadingThis;
-                                    return (
-                                        <div
-                                            key={asset.id}
-                                            className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
-                                        >
-                                            <div className="flex items-center justify-between w-full">
-                                                <div className="flex items-start gap-3">
-                                                    <div className={cn(
-                                                        "mt-1.5 h-2 w-2 rounded-full shrink-0",
-                                                        asset.exists ? "bg-emerald-500" : "bg-amber-500"
-                                                    )} />
-                                                    <div className="min-w-0">
-                                                        <p className="text-sm font-medium leading-none truncate">{asset.label}</p>
-                                                        <p className="mt-1 text-xs text-muted-foreground font-mono truncate max-w-[300px]" title={asset.path}>
-                                                            {asset.path.split('/').pop()}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-4 shrink-0">
-                                                    {asset.sizeBytes && (
-                                                        <span className="text-xs text-muted-foreground font-mono">
-                                                            {(asset.sizeBytes / 1024 / 1024).toFixed(1)} MB
-                                                        </span>
-                                                    )}
-                                                    {asset.exists ? (
-                                                        <Check className="h-4 w-4 text-emerald-500" />
-                                                    ) : (
-                                                        <AlertCircle className="h-4 w-4 text-amber-500" />
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {asset.exists && (
-                                                <div className="flex items-center justify-end">
-                                                    <button
-                                                        onClick={() => handleRedownloadModel(asset.id)}
-                                                        disabled={disableRedownload}
-                                                        className={cn(
-                                                            "inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-xs font-medium text-muted-foreground transition-colors",
-                                                            "hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        )}
-                                                        title="Remove the current file and download a fresh copy"
-                                                    >
-                                                        {isDownloadingThis ? (
-                                                            <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                                        ) : (
-                                                            <RotateCcw className="h-3.5 w-3.5" />
-                                                        )}
-                                                        Force Redownload
-                                                    </button>
-                                                </div>
-                                            )}
-                                            {isDownloadingThis && (
-                                                <div className="w-full">
-                                                    <div className="flex items-center justify-between mb-1.5">
-                                                        <span className="text-xs text-muted-foreground">{modelDownloadEvent.message}</span>
-                                                        <span className="text-xs font-medium">{Math.round(modelDownloadEvent.percent ?? 0)}%</span>
-                                                    </div>
-                                                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-background/50">
-                                                        <div
-                                                            className="h-full bg-primary transition-all duration-300 ease-in-out"
-                                                            style={{ width: `${modelDownloadEvent.percent ?? 0}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
+                            {modelGroups.map((group) => (
+                                <div key={group.id} className="space-y-3">
+                                    <div className="flex items-center gap-2 pb-2 border-b">
+                                        <Box className="h-4 w-4 text-muted-foreground" />
+                                        <h3 className="text-sm font-medium">{group.label}</h3>
+                                        <div className={cn(
+                                            "ml-auto text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full",
+                                            group.ready ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
+                                        )}>
+                                            {group.ready ? "Installed" : "Not Installed"}
                                         </div>
-                                    );
-                                })}
-                            </div>
+                                    </div>
+                                    <div className="grid gap-3">
+                                        {group.assets.map((asset) => {
+                                            const isDownloadingThis = isDownloading && modelDownloadEvent?.assetId === asset.id;
+                                            const disableRedownload = isDownloading && !isDownloadingThis;
+                                            return (
+                                                <div
+                                                    key={asset.id}
+                                                    className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
+                                                >
+                                                    <div className="flex items-center justify-between w-full">
+                                                        <div className="flex items-start gap-3">
+                                                            <div className={cn(
+                                                                "mt-1.5 h-2 w-2 rounded-full shrink-0",
+                                                                asset.exists ? "bg-emerald-500" : "bg-amber-500"
+                                                            )} />
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-medium leading-none truncate">{asset.label}</p>
+                                                                <p className="mt-1 text-xs text-muted-foreground font-mono truncate max-w-[300px]" title={asset.path}>
+                                                                    {asset.path.split('/').pop()}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-4 shrink-0">
+                                                            {asset.sizeBytes && (
+                                                                <span className="text-xs text-muted-foreground font-mono">
+                                                                    {(asset.sizeBytes / 1024 / 1024).toFixed(1)} MB
+                                                                </span>
+                                                            )}
+                                                            {asset.exists ? (
+                                                                <Check className="h-4 w-4 text-emerald-500" />
+                                                            ) : (
+                                                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {asset.exists && (
+                                                        <div className="flex items-center justify-end">
+                                                            <button
+                                                                onClick={() => handleRedownloadModel(asset.id)}
+                                                                disabled={disableRedownload}
+                                                                className={cn(
+                                                                    "inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-xs font-medium text-muted-foreground transition-colors",
+                                                                    "hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                )}
+                                                                title="Remove the current file and download a fresh copy"
+                                                            >
+                                                                {isDownloadingThis ? (
+                                                                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                                                ) : (
+                                                                    <RotateCcw className="h-3.5 w-3.5" />
+                                                                )}
+                                                                Force Redownload
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    {isDownloadingThis && (
+                                                        <div className="w-full">
+                                                            <div className="flex items-center justify-between mb-1.5">
+                                                                <span className="text-xs text-muted-foreground">{modelDownloadEvent.message}</span>
+                                                                <span className="text-xs font-medium">{Math.round(modelDownloadEvent.percent ?? 0)}%</span>
+                                                            </div>
+                                                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-background/50">
+                                                                <div
+                                                                    className="h-full bg-primary transition-all duration-300 ease-in-out"
+                                                                    style={{ width: `${modelDownloadEvent.percent ?? 0}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
 
-                {modelDownloadEvent?.message && !modelDownloadEvent.assetId && (
-                    <div className="mt-6 rounded-lg border bg-muted/50 p-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium">{modelDownloadEvent.message}</span>
-                            {modelDownloadEvent.percent !== null && modelDownloadEvent.percent !== undefined && (
-                                <span className="text-sm text-muted-foreground">{Math.round(modelDownloadEvent.percent)}%</span>
-                            )}
-                        </div>
-                        {modelDownloadEvent.percent !== null && (
-                            <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                                <div
-                                    className="h-full bg-primary transition-all duration-300 ease-in-out"
-                                    style={{ width: `${modelDownloadEvent.percent}%` }}
-                                />
+                        {modelDownloadEvent?.message && !modelDownloadEvent.assetId && (
+                            <div className="mt-6 rounded-lg border bg-muted/50 p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium">{modelDownloadEvent.message}</span>
+                                    {modelDownloadEvent.percent !== null && modelDownloadEvent.percent !== undefined && (
+                                        <span className="text-sm text-muted-foreground">{Math.round(modelDownloadEvent.percent)}%</span>
+                                    )}
+                                </div>
+                                {modelDownloadEvent.percent !== null && (
+                                    <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                                        <div
+                                            className="h-full bg-primary transition-all duration-300 ease-in-out"
+                                            style={{ width: `${modelDownloadEvent.percent}%` }}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         )}
-                    </div>
-                )}
                     </div>
                 </div>
             </div>

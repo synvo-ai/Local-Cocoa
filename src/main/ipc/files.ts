@@ -1,7 +1,6 @@
 import { ipcMain, dialog, shell, app } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import { config } from '../config';
 import {
     listFolders,
     addFolder,
@@ -21,8 +20,10 @@ import {
     getChunkById,
     listChunksForFile,
     getChunkHighlightPngBase64,
+    getPdfPageImageBase64,
     // Staged indexing
     getStageProgress,
+    getErrorFiles,
     startSemanticIndexing,
     stopSemanticIndexing,
     startDeepIndexing,
@@ -54,7 +55,8 @@ async function isPathInIndexedFolders(targetPath: string): Promise<boolean> {
                 return true;
             }
         }
-        if (resolvedTarget.startsWith(config.paths.runtimeRoot + path.sep)) {
+        const userData = app.getPath('userData');
+        if (resolvedTarget.startsWith(userData + path.sep)) {
             return true;
         }
         return false;
@@ -108,6 +110,7 @@ export function registerFileHandlers(windowManager: WindowManager) {
 
     // Staged indexing (two-round progressive system)
     ipcMain.handle('index:stage-progress', async (_event, folderId?: string) => getStageProgress(folderId));
+    ipcMain.handle('index:error-files', async (_event, folderId?: string) => getErrorFiles(folderId));
     ipcMain.handle('index:start-semantic', async () => startSemanticIndexing());
     ipcMain.handle('index:stop-semantic', async () => stopSemanticIndexing());
     ipcMain.handle('index:start-deep', async () => startDeepIndexing());
@@ -154,23 +157,46 @@ export function registerFileHandlers(windowManager: WindowManager) {
         return getChunkHighlightPngBase64(chunkId, zoom);
     });
 
+    ipcMain.handle('files:pdf-page-image', async (_event, payload: { fileId: string; pageNumber: number; zoom?: number }) => {
+        const fileId = payload?.fileId;
+        if (!fileId) {
+            throw new Error('Missing file id.');
+        }
+        const pageNumber = payload?.pageNumber;
+        if (typeof pageNumber !== 'number' || pageNumber < 1) {
+            throw new Error('Invalid page number.');
+        }
+        const zoom = typeof payload?.zoom === 'number' ? payload.zoom : 2.0;
+        return getPdfPageImageBase64(fileId, pageNumber, zoom);
+    });
+
     ipcMain.handle('files:open', async (_event, payload: { path: string }) => {
         const targetPath = payload?.path;
         if (!targetPath) {
             throw new Error('Missing file path.');
         }
 
-        const isAllowed = await isPathInIndexedFolders(targetPath);
-        if (!isAllowed) {
-            throw new Error('Access denied: path is outside indexed folders.');
+        // Validate the path is absolute and doesn't contain path traversal
+        const resolvedPath = path.resolve(targetPath);
+        if (resolvedPath !== path.normalize(targetPath)) {
+            // Path contains relative components like .. that resolved differently
+            const isAllowed = await isPathInIndexedFolders(targetPath);
+            if (!isAllowed) {
+                throw new Error('Access denied: path is outside indexed folders.');
+            }
         }
 
-        const result = await shell.openPath(targetPath);
+        // Check if file exists before opening
+        if (!fs.existsSync(resolvedPath)) {
+            throw new Error(`File not found: ${resolvedPath}`);
+        }
+
+        const result = await shell.openPath(resolvedPath);
         if (result) {
             throw new Error(result);
         }
 
-        return { path: targetPath };
+        return { path: resolvedPath };
     });
 
     ipcMain.handle('files:delete', async (_event, fileId: string) => {

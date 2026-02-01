@@ -521,7 +521,7 @@ export function ConversationPanel({
     const [input, setInput] = useState('');
     const [suggestionQuery, setSuggestionQuery] = useState<string | null>(null);
     const [selectedIndex, setSelectedIndex] = useState(0);
-    const [searchMode, setSearchMode] = useState<SearchMode>('auto');
+    const [searchMode, setSearchMode] = useState<SearchMode>('knowledge');
     const [isModeDropdownOpen, setIsModeDropdownOpen] = useState(false);
     const [useVisionForAnswer, setUseVisionForAnswer] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -565,6 +565,10 @@ export function ConversationPanel({
     const fetchSuggestions = useCallback(async () => {
         try {
             setIsRefreshingSuggestions(true);
+            if (!window.api?.getLocalKey) {
+                console.warn('[ConversationPanel] window.api not available yet');
+                return;
+            }
             const key = await window.api.getLocalKey();
             if (key) {
                 // Check if user has any indexed files
@@ -745,7 +749,14 @@ export function ConversationPanel({
                         // Style lists
                         ul: ({ children }) => <ul className="list-disc pl-4 space-y-1">{children}</ul>,
                         ol: ({ children }) => <ol className="list-decimal pl-4 space-y-1">{children}</ol>,
-                        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                        li: ({ children }) => {
+                            const processed = Array.isArray(children)
+                                ? children.map((child, _idx) =>
+                                    typeof child === 'string' ? processReferences(child) : child
+                                )
+                                : typeof children === 'string' ? processReferences(children) : children;
+                            return <li className="leading-relaxed">{processed}</li>;
+                        },
                         // Style blockquotes
                         blockquote: ({ children }) => (
                             <blockquote className={cn(

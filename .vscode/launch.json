@@ -11,7 +11,7 @@
               "run",
               "dev:electron"
           ],
-          "env": { // Overwite env variables
+          "env": { // Overwrite env variables
               "LOCAL_SERVICE_LAUNCH_PYTHON_SERVER": "true",
               "DEBUG": "true",
               "PYTHONUNBUFFERED": "1",

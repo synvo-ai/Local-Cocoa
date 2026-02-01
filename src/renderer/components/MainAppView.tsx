@@ -238,16 +238,14 @@ export function MainAppView() {
 
     const handleRescanFolder = useCallback(async (id: string, mode?: 'fast' | 'deep') => {
         const api = window.api;
-        if (!api?.runIndex || !api?.runStagedIndex) return;
+        if (!api?.runStagedIndex) return;
         try {
-            // Use different API based on mode:
-            // - Fast (default): Use staged indexing (fast text extraction, no VLM)
-            // - Deep: Use legacy indexing with VLM processing
-            if (!mode || mode === 'fast') {
-                await api.runStagedIndex({ folders: [id] });
-            } else {
-                await api.runIndex({ mode: 'rescan', scope: 'folder', folders: [id], indexing_mode: 'deep' });
+            // Use staged indexing for both fast and deep modes
+            // For deep mode, enable deep stage first, then run staged index
+            if (mode === 'deep') {
+                await startDeepIndexing();
             }
+            await api.runStagedIndex({ folders: [id] });
             // Fast scans can complete before the polling loop observes "running".
             // Force a refresh so the UI updates last-indexed / failed files immediately.
             await refreshData();
@@ -255,26 +253,24 @@ export function MainAppView() {
             console.error('Failed to rescan folder', error);
             setNotification({ message: error instanceof Error ? error.message : 'Failed to rescan folder.' });
         }
-    }, [refreshData]);
+    }, [refreshData, startDeepIndexing]);
 
     const handleReindexFolder = useCallback(async (id: string, mode?: 'fast' | 'deep') => {
         const api = window.api;
-        if (!api?.runIndex || !api?.runStagedIndex) return;
+        if (!api?.runStagedIndex) return;
         try {
-            // Use different API based on mode:
-            // - Fast (default): Use staged indexing (fast text extraction, no VLM)
-            // - Deep: Use legacy indexing with VLM processing
-            if (!mode || mode === 'fast') {
-                await api.runStagedIndex({ folders: [id], mode: 'reindex' });
-            } else {
-                await api.runIndex({ mode: 'reindex', scope: 'folder', folders: [id], indexing_mode: 'deep' });
+            // Use staged indexing for both fast and deep modes
+            // For deep mode, enable deep stage first, then run staged index with reindex
+            if (mode === 'deep') {
+                await startDeepIndexing();
             }
+            await api.runStagedIndex({ folders: [id], mode: 'reindex' });
             await refreshData();
         } catch (error) {
             console.error('Failed to reindex folder', error);
             setNotification({ message: error instanceof Error ? error.message : 'Failed to reindex folder.' });
         }
-    }, [refreshData]);
+    }, [refreshData, startDeepIndexing]);
 
     const {
         sessions,

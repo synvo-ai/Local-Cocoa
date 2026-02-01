@@ -16,11 +16,11 @@ export class TrayManager {
         
         if (process.platform === 'darwin') {
             // For macOS, use colored tray icon
-            const iconPath = path.join(config.paths.resourceRoot, 'assets', 'tray-iconTemplate.png');
+            const iconPath = path.join(config.paths.projectRoot, 'assets', 'tray-iconTemplate.png');
             trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 18, height: 18 });
         } else {
             // For Windows, use the regular colored icon
-            const iconPath = path.join(config.paths.resourceRoot, 'assets', 'icon.png');
+            const iconPath = path.join(config.paths.projectRoot, 'assets', 'icon.png');
             trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 18, height: 18 });
         }
 

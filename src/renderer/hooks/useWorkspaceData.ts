@@ -13,7 +13,8 @@ import type {
     SystemSpecs
 } from '../types';
 
-const INVENTORY_LIMIT = 500;
+// No limit - use virtual scrolling on the frontend for performance
+const INVENTORY_LIMIT = undefined;
 
 const KIND_DEFAULT_COUNTS: Record<FileKind, number> = {
     document: 0,
@@ -253,7 +254,7 @@ export function useWorkspaceData() {
                 api.listFolders().then(f => { console.log('[useWorkspaceData] listFolders returned:', f.length, 'folders'); return f; }),
                 shouldSkipInventory
                     ? Promise.resolve({ files: files, progress, indexing: [] }) // Return cached data
-                    : api.indexInventory({ limit: INVENTORY_LIMIT }),
+                    : api.indexInventory(INVENTORY_LIMIT ? { limit: INVENTORY_LIMIT } : {}),
                 api.listEmailAccounts?.() ?? Promise.resolve([]),
                 (api as any).getSystemSpecs ? (api as any).getSystemSpecs() : Promise.resolve(null),
                 (api as any).stageProgress ? (api as any).stageProgress() : Promise.resolve(null)
@@ -344,7 +345,7 @@ export function useWorkspaceData() {
                     setIsIndexing(true);
                     try {
                         const [inventory, folderData, emailData] = await Promise.all([
-                            api.indexInventory({ limit: INVENTORY_LIMIT }),
+                            api.indexInventory(INVENTORY_LIMIT ? { limit: INVENTORY_LIMIT } : {}),
                             api.listFolders(),
                             api.listEmailAccounts?.() ?? Promise.resolve([])
                         ]);

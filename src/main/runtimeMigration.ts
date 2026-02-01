@@ -26,9 +26,6 @@ interface ValidationResult {
 // Expected binary directories (must exist in runtime for app to function)
 const REQUIRED_BINARY_DIRS = [
     'local-cocoa-models',
-    'mail',
-    'notes',
-    'qdrant-data',
 ];
 
 // Data directories (will be created if missing)

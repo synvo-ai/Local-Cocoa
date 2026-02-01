@@ -86,6 +86,16 @@ export interface IndexedFile extends FileRecord {
     fullPath: string;
 }
 
+/**
+ * Represents a spatial region in the source document where chunk text originated.
+ * Coordinates are normalized (0-1) relative to page dimensions.
+ */
+export interface SourceRegion {
+    pageNum: number;  // 1-indexed page number
+    bbox: [number, number, number, number];  // [x0, y0, x1, y1] normalized 0-1
+    confidence?: number | null;  // OCR confidence if applicable
+}
+
 export interface ChunkSnapshot {
     chunkId: string;
     fileId: string;
@@ -97,6 +107,10 @@ export interface ChunkSnapshot {
     sectionPath?: string | null;
     metadata: Record<string, unknown>;
     createdAt: string;
+    // Spatial metadata for chunk area visualization (optional, backward compatible)
+    pageNum?: number | null;  // Primary page number (1-indexed)
+    bbox?: [number, number, number, number] | null;  // Primary bbox [x0, y0, x1, y1] normalized 0-1
+    sourceRegions?: SourceRegion[] | null;  // All source regions for multi-page chunks
 }
 
 export interface IndexResultSnapshot {
@@ -185,6 +199,10 @@ export interface SearchHit {
     analysisComment?: string | null;
     hasAnswer?: boolean;
     analysisConfidence?: number;
+    // Spatial metadata for chunk area visualization (optional, backward compatible)
+    pageNum?: number | null;  // Primary page number (1-indexed)
+    bbox?: [number, number, number, number] | null;  // Primary bbox [x0, y0, x1, y1] normalized 0-1
+    sourceRegions?: SourceRegion[] | null;  // All source regions for multi-page chunks
 }
 
 export interface AgentStepFile {
@@ -364,6 +382,10 @@ export interface ThinkingStepHit {
     hasAnswer?: boolean;
     analysisComment?: string | null;
     analysisConfidence?: number;
+    // Spatial metadata for chunk area visualization
+    pageNum?: number | null;
+    bbox?: [number, number, number, number] | null;
+    sourceRegions?: SourceRegion[] | null;
 }
 
 // Rich chunk reference for clickable display
@@ -377,6 +399,10 @@ export interface ChunkReference {
     confidence?: number;
     isRelevant?: boolean;
     extractedAnswer?: string;
+    // Spatial metadata for chunk area visualization
+    pageNum?: number | null;
+    bbox?: [number, number, number, number] | null;
+    sourceRegions?: SourceRegion[] | null;
 }
 
 // Verification result from LLM

@@ -3,14 +3,26 @@
  */
 
 import { useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     CheckCircle,
     Circle,
     Play,
     Pause,
+    X,
+    AlertCircle,
+    FolderOpen,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { StagedIndexProgress } from '../../electron/backendClient';
+
+interface ErrorFile {
+    id: string;
+    name: string;
+    path: string;
+    error_reason: string | null;
+    error_at: string | null;
+}
 
 interface StageProgressBarProps {
     progress: StagedIndexProgress | null;
@@ -142,6 +154,36 @@ export function StageProgressBar({
 }: StageProgressBarProps) {
     const [semanticLoading, setSemanticLoading] = useState(false);
     const [deepLoading, setDeepLoading] = useState(false);
+    const [showErrorModal, setShowErrorModal] = useState(false);
+    const [errorFiles, setErrorFiles] = useState<ErrorFile[]>([]);
+    const [loadingErrors, setLoadingErrors] = useState(false);
+    
+    const handleFailedClick = useCallback(async () => {
+        setShowErrorModal(true);
+        setLoadingErrors(true);
+        try {
+            const api = window.api;
+            if (api?.getErrorFiles) {
+                const files = await api.getErrorFiles();
+                setErrorFiles(files);
+            }
+        } catch (error) {
+            console.error('Failed to load error files:', error);
+        } finally {
+            setLoadingErrors(false);
+        }
+    }, []);
+    
+    const handleShowInFolder = useCallback(async (filePath: string) => {
+        try {
+            const api = window.api;
+            if (api?.showInFolder) {
+                await api.showInFolder(filePath);
+            }
+        } catch (error) {
+            console.error('Failed to show file in folder:', error);
+        }
+    }, []);
     
     const handleToggleSemantic = useCallback(async () => {
         if (!progress) return;
@@ -238,11 +280,113 @@ export function StageProgressBar({
                             <span className="text-amber-500">{skipped} skipped</span>
                         )}
                         {totalErrors > 0 && (
-                            <span className="text-red-500">{totalErrors} failed</span>
+                            <button 
+                                onClick={handleFailedClick}
+                                className="text-red-500 hover:text-red-600 hover:underline cursor-pointer transition-colors"
+                            >
+                                {totalErrors} failed
+                            </button>
                         )}
                     </div>
                 )}
             </div>
+            
+            {/* Error Files Drawer - Portal to body for proper positioning */}
+            {showErrorModal && createPortal(
+                <div 
+                    className="fixed inset-0 z-50"
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                >
+                    {/* Backdrop */}
+                    <div 
+                        className="absolute inset-0 bg-black/30" 
+                        onClick={() => setShowErrorModal(false)}
+                    />
+                    
+                    {/* Right Panel - matching RightPanel.tsx style */}
+                    <div 
+                        className="absolute inset-y-0 right-0 w-[480px] max-w-[90vw] flex flex-col border-l bg-background shadow-xl"
+                    >
+                        {/* Header - matching RightPanel style */}
+                        <div className="flex items-center justify-between gap-2 border-b p-4 bg-muted/10 shrink-0">
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowErrorModal(false);
+                                    }} 
+                                    className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                                <h3 className="font-semibold text-sm">Failed Files</h3>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                                {errorFiles.length} file{errorFiles.length !== 1 ? 's' : ''}
+                            </span>
+                        </div>
+                        
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            {loadingErrors ? (
+                                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                                    <div className="animate-spin h-6 w-6 border-2 border-primary/20 border-t-primary rounded-full" />
+                                    <p className="text-xs text-muted-foreground">Loading...</p>
+                                </div>
+                            ) : errorFiles.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                                    <div className="rounded-lg bg-emerald-500/10 p-2.5">
+                                        <CheckCircle className="h-5 w-5 text-emerald-500" />
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">No failed files</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Tip */}
+                                    <div className="rounded-lg border bg-muted/30 p-3">
+                                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                            <span className="font-medium text-foreground">Tip:</span> Click any file to reveal it in Finder. Common causes include encrypted PDFs, corrupted files, or wrong file extensions.
+                                        </p>
+                                    </div>
+                                    
+                                    {/* File list */}
+                                    <div className="space-y-2">
+                                        {errorFiles.map((file) => (
+                                            <div 
+                                                key={file.id}
+                                                onClick={() => handleShowInFolder(file.path)}
+                                                className="rounded-lg border bg-card p-4 shadow-sm hover:bg-accent/50 transition-colors cursor-pointer group"
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <div className="rounded-lg bg-red-500/10 p-2 group-hover:bg-primary/10 transition-colors">
+                                                        <AlertCircle className="h-4 w-4 text-red-500 group-hover:hidden" />
+                                                        <FolderOpen className="h-4 w-4 text-primary hidden group-hover:block" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="text-sm font-medium truncate" title={file.name}>
+                                                            {file.name}
+                                                        </h4>
+                                                        <p className="text-[11px] text-muted-foreground truncate mt-0.5 font-mono" title={file.path}>
+                                                            {file.path}
+                                                        </p>
+                                                        {file.error_reason && (
+                                                            <div className="mt-2 text-xs text-red-600 dark:text-red-400 leading-relaxed">
+                                                                {file.error_reason}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 }

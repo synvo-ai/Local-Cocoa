@@ -66,6 +66,8 @@ const api = {
     // Staged indexing (two-round progressive system)
     stageProgress: (folderId?: string): Promise<any> =>
         ipcRenderer.invoke('index:stage-progress', folderId),
+    getErrorFiles: (folderId?: string): Promise<Array<{id: string; name: string; path: string; error_reason: string | null; error_at: string | null}>> =>
+        ipcRenderer.invoke('index:error-files', folderId),
     startSemanticIndexing: (): Promise<any> =>
         ipcRenderer.invoke('index:start-semantic'),
     stopSemanticIndexing: (): Promise<any> =>
@@ -91,6 +93,8 @@ const api = {
         ipcRenderer.invoke('files:list-chunks', fileId),
     getChunkHighlight: (chunkId: string, zoom?: number): Promise<string> =>
         ipcRenderer.invoke('files:chunk-highlight', { chunkId, zoom }),
+    getPdfPageImage: (fileId: string, pageNumber: number, zoom?: number): Promise<string> =>
+        ipcRenderer.invoke('files:pdf-page-image', { fileId, pageNumber, zoom }),
     openFile: (filePath: string): Promise<{ path: string }> =>
         ipcRenderer.invoke('files:open', { path: filePath }),
     deleteFile: (fileId: string): Promise<{ id: string }> => ipcRenderer.invoke('files:delete', fileId),
@@ -128,6 +132,7 @@ const api = {
         ipcRenderer.invoke('qa:ask', { query, limit, mode, searchMode }),
     health: (): Promise<HealthStatus> => ipcRenderer.invoke('health:ping'),
     openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('system:open-external', url),
+    showInFolder: (filePath: string): Promise<boolean> => ipcRenderer.invoke('system:show-in-folder', filePath),
     getSystemSpecs: (): Promise<{ totalMemory: number; platform: string; arch: string; cpus: number }> =>
         ipcRenderer.invoke('system:specs'),
     saveImage: (options: { data: string; defaultName?: string; title?: string }): Promise<{ saved: boolean; path: string | null }> =>

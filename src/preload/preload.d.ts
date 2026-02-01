@@ -54,6 +54,7 @@ declare global {
             getChunk: (chunkId: string) => Promise<ChunkSnapshot | null>;
             listFileChunks: (fileId: string) => Promise<ChunkSnapshot[]>;
             getChunkHighlight?: (chunkId: string, zoom?: number) => Promise<string>;
+            getPdfPageImage?: (fileId: string, pageNumber: number, zoom?: number) => Promise<string>;
             openFile: (filePath: string) => Promise<{ path: string }>;
             deleteFile: (fileId: string) => Promise<{ id: string }>;
             search: (query: string, limit?: number) => Promise<SearchResponse>;

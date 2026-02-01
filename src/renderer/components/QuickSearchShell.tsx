@@ -45,7 +45,7 @@ export function QuickSearchShell() {
 
     // Notes state
     const [notes, setNotes] = useState<NoteSummary[]>([]);
-    const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+    const [_selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
     const [selectedNote, setSelectedNote] = useState<NoteContent | null>(null);
     const [isNotesLoading, setIsNotesLoading] = useState(false);
     const [isNoteSaving, setIsNoteSaving] = useState(false);
@@ -346,10 +346,9 @@ export function QuickSearchShell() {
                         }
                     }
                 } else {
-                    // QA Streaming Mode
-                    const qaLimit = config?.qaContextLimit ?? 5;
+                    // QA Streaming Mode - let backend use its own qa_context_limit setting
                     let buffer = '';
-                    const cancel = api.askStream(trimmed, qaLimit, 'qa', {
+                    const cancel = api.askStream(trimmed, undefined, 'qa', {
                         onData: (chunk) => {
                             if (pendingRequestIdRef.current !== requestId) return;
                             buffer += chunk;

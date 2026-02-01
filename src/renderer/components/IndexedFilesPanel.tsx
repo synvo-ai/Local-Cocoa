@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
     Folder,
     FolderOpen,
@@ -604,7 +605,7 @@ function ActionDropdown({
             </button>
             {isOpen && (
                 <div className={cn(
-                    "absolute right-0 z-50 min-w-[160px] rounded-xl border bg-popover p-1.5 shadow-lg",
+                    "absolute right-0 z-[9999] min-w-[160px] rounded-xl border bg-popover p-1.5 shadow-lg",
                     openUpward ? "bottom-full mb-1" : "top-full mt-1"
                 )}>
                     {options.map((option) => {
@@ -1055,6 +1056,8 @@ export function IndexedFilesPanel({
     const [filterType, setFilterType] = useState<FilterType>('all');
     // Map file path to its processing stage
     const [processingFilesMap, setProcessingFilesMap] = useState<Map<string, string | null | undefined>>(new Map());
+    // Track files being indexed via UI actions
+    const [_processingFiles, setProcessingFiles] = useState<Set<string>>(new Set());
 
     // Track processing files with their stages
     useEffect(() => {
@@ -1150,6 +1153,15 @@ export function IndexedFilesPanel({
     const totalFiles = files.length;
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
 
+    // Virtual list setup for performance with large file lists
+    const fileListRef = useRef<HTMLDivElement>(null);
+    const rowVirtualizer = useVirtualizer({
+        count: displayedFiles.length,
+        getScrollElement: () => fileListRef.current,
+        estimateSize: () => 52, // Approximate row height in pixels
+        overscan: 10, // Render 10 extra items above/below viewport
+    });
+
     const handleAddFolder = async () => {
         setIsAddingFolder(true);
         try {
@@ -1183,23 +1195,20 @@ export function IndexedFilesPanel({
 
     const handleIndexFile = useCallback(async (filePath: string, mode: 'fast' | 'deep') => {
         const api = window.api;
-        if (!api?.runIndex || !api?.runStagedIndex) return;
+        if (!api?.runStagedIndex) return;
 
         setProcessingFiles(prev => new Set(prev).add(filePath));
 
         try {
-            if (mode === 'fast') {
-                await api.runStagedIndex({
-                    files: [filePath],
-                    mode: 'reindex',
-                });
-            } else {
-                await api.runIndex({
-                    mode: 'reindex',
-                    files: [filePath],
-                    indexing_mode: 'deep',
-                });
+            // Use staged API for both fast and deep modes
+            // For deep mode, enable deep stage first, then run staged index
+            if (mode === 'deep' && (api as any).startDeepIndexing) {
+                await (api as any).startDeepIndexing();
             }
+            await api.runStagedIndex({
+                files: [filePath],
+                mode: 'reindex',
+            });
         } catch (error) {
             console.error('Failed to index file:', error);
         } finally {
@@ -1498,8 +1507,8 @@ export function IndexedFilesPanel({
                     </div>
                 )}
 
-                {/* File list */}
-                <div className="flex-1 overflow-y-auto">
+                {/* File list with virtual scrolling for performance */}
+                <div ref={fileListRef} className="flex-1 overflow-y-auto">
                     {displayedFiles.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-center p-8">
                             <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
@@ -1511,21 +1520,42 @@ export function IndexedFilesPanel({
                             </p>
                         </div>
                     ) : (
-                        <div>
-                            {displayedFiles.map(file => (
-                                <FileRow
-                                    key={file.id}
-                                    file={file}
-                                    mode={getFileIndexMode(file, getProcessingInfo(file))}
-                                    onSelect={() => onSelectFile?.(file)}
-                                    onOpen={() => handleOpenFile(file)}
-                                    onIndex={(mode) => handleIndexFile(file.fullPath, mode)}
-                                    onUnindex={() => handleUnindexFile(file.id)}
-                                    onTogglePrivacy={handleToggleFilePrivacy}
-                                    onExtractMemory={handleExtractMemory}
-                                    onPauseMemory={handlePauseMemory}
-                                />
-                            ))}
+                        <div
+                            style={{
+                                height: `${rowVirtualizer.getTotalSize()}px`,
+                                width: '100%',
+                                position: 'relative',
+                            }}
+                        >
+                            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                const file = displayedFiles[virtualRow.index];
+                                return (
+                                    <div
+                                        key={file.id}
+                                        className="hover:z-[100]"
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            height: `${virtualRow.size}px`,
+                                            transform: `translateY(${virtualRow.start}px)`,
+                                        }}
+                                    >
+                                        <FileRow
+                                            file={file}
+                                            mode={getFileIndexMode(file, getProcessingInfo(file))}
+                                            onSelect={() => onSelectFile?.(file)}
+                                            onOpen={() => handleOpenFile(file)}
+                                            onIndex={(mode) => handleIndexFile(file.fullPath, mode)}
+                                            onUnindex={() => handleUnindexFile(file.id)}
+                                            onTogglePrivacy={handleToggleFilePrivacy}
+                                            onExtractMemory={handleExtractMemory}
+                                            onPauseMemory={handlePauseMemory}
+                                        />
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>

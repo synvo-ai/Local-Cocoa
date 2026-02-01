@@ -1,4 +1,4 @@
-import { Moon, Sun, Monitor, Activity, Database, Cpu, Settings as SettingsIcon, CheckCircle2, Download, Box, RotateCcw, Check, AlertCircle, Shield, Trash2, Plus, Copy, HardDrive, Folder, Cloud, X, Settings2, ChevronRight, FileDown, Loader2, Bug, Brain } from 'lucide-react';
+import { Moon, Sun, Monitor, Activity, Database, Cpu, Settings as SettingsIcon, CheckCircle2, Download, Box, RotateCcw, Check, AlertCircle, Shield, Trash2, Plus, Copy, HardDrive, Folder, Cloud, X, Settings2, ChevronRight, FileDown, Loader2, Bug, Brain, Power, PlayCircle } from 'lucide-react';
 import { LanguageSwitcher } from '../../components/LanguageSwitcher';
 import { CSSProperties, useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -221,8 +221,8 @@ function ApiKeyItem({ apiKey, localKey, onDelete }: { apiKey: ApiKey; localKey: 
                         onClick={copyKey}
                         className={cn(
                             "p-1 rounded transition-colors",
-                            copied 
-                                ? "text-green-500" 
+                            copied
+                                ? "text-green-500"
                                 : "hover:bg-background text-muted-foreground hover:text-foreground"
                         )}
                         title={copied ? "Copied!" : "Copy"}
@@ -357,8 +357,77 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
     const { skin, setSkin } = useSkin();
     const { health, systemSpecs } = useWorkspaceData();
     const { config, loading: configLoading, updateConfig } = useModelConfig();
-    const { modelStatus, handleManualModelDownload, handleRedownloadModel, modelDownloadEvent } = useModelStatus();
+    const { modelStatus, handleManualModelDownload, handleRedownloadModel, modelDownloadEvent, runtimeStatus } = useModelStatus();
     const dragStyle = { WebkitAppRegion: 'drag' } as CSSProperties;
+
+    const formatDuration = (seconds: number | null | undefined) => {
+        if (seconds == null) return null;
+        if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s`;
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.max(0, Math.round(seconds - minutes * 60));
+        return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+    };
+
+    const normalizeRuntimeKey = (name: string): 'embedding' | 'rerank' | 'vision' | 'whisper' | null => {
+        const lower = name.toLowerCase();
+        if (lower.includes('embed')) return 'embedding';
+        if (lower.includes('rerank') || lower.includes('rank')) return 'rerank';
+        if (lower.includes('vision') || lower.includes('vlm') || lower.includes('llm')) return 'vision';
+        if (lower.includes('whisper') || lower.includes('audio') || lower.includes('transcri')) return 'whisper';
+        return null;
+    };
+
+    // Get active model label for each service type
+    const getActiveModelLabel = useCallback((key: 'embedding' | 'rerank' | 'vision' | 'whisper'): string | null => {
+        if (!config || !modelStatus?.assets) return null;
+        
+        let activeId: string | undefined;
+        switch (key) {
+            case 'embedding':
+                activeId = config.activeEmbeddingModelId;
+                break;
+            case 'rerank':
+                activeId = config.activeRerankerModelId;
+                break;
+            case 'vision':
+                activeId = config.activeModelId;
+                break;
+            case 'whisper':
+                activeId = config.activeAudioModelId;
+                break;
+        }
+        
+        if (!activeId) return null;
+        
+        const asset = modelStatus.assets.find(a => a.id === activeId);
+        return asset?.label ?? activeId;
+    }, [config, modelStatus?.assets]);
+
+    const mergedHealthServices = useMemo(() => {
+        const base = (health?.services ?? []).map((service) => {
+            const key = normalizeRuntimeKey(service.name);
+            const runtimeEntry = key ? runtimeStatus?.[key] : undefined;
+            return { ...service, key, runtimeEntry } as const;
+        });
+
+        // Ensure managed models are always present even if health doesn't list them.
+        (['embedding', 'rerank', 'vision', 'whisper'] as const).forEach((key) => {
+            const exists = base.some((item) => item.key === key);
+            if (exists) return;
+
+            const label = key === 'embedding' ? 'Embedding' : key === 'rerank' ? 'Reranker' : key === 'whisper' ? 'Whisper' : 'Vision/LLM';
+            base.push({
+                name: label,
+                status: 'offline',
+                latencyMs: 0,
+                details: 'Idle',
+                key,
+                runtimeEntry: runtimeStatus?.[key]
+            });
+        });
+
+        return base;
+    }, [health?.services, runtimeStatus]);
 
     const [activeTab, setActiveTab] = useState<'general' | 'models' | 'retrieval' | 'memory' | 'security' | 'scan'>(initialTab);
     const [pythonSettings, setPythonSettings] = useState<PythonSettings | null>(null);
@@ -381,6 +450,20 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
     const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
     const [newKeyName, setNewKeyName] = useState('');
     const [createdKey, setCreatedKey] = useState<ApiKey | null>(null);
+
+    const toggleManagedModel = useCallback(async (modelType: 'embedding' | 'rerank' | 'vision' | 'whisper', currentState: string) => {
+        try {
+            const action = currentState === 'running' || currentState === 'starting' ? 'stop' : 'start';
+            const headers: Record<string, string> = {};
+            if (localKey) headers['X-API-Key'] = localKey;
+            await fetch(`http://127.0.0.1:8890/models/${modelType}/${action}`, {
+                method: 'POST',
+                headers,
+            });
+        } catch (err) {
+            console.error('Failed to toggle model', err);
+        }
+    }, [localKey]);
 
     // Scan settings state
     const [recommendedDirs, setRecommendedDirs] = useState<ScanDirectory[]>([]);
@@ -413,6 +496,10 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
     }, []);
 
     useEffect(() => {
+        if (!window.api?.getLocalKey) {
+            console.warn('[SettingsPanel] window.api not available yet');
+            return;
+        }
         window.api.getLocalKey().then(key => {
             setLocalKey(key);
             if (key) {
@@ -687,44 +774,44 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                         </div>
                     </div>
 
-                {/* Tabs - Non-draggable */}
-                <div className="flex items-center gap-6" style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
-                    <button
-                        onClick={() => setActiveTab('general')}
-                        className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'general' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
-                    >
-                        <SettingsIcon className="h-4 w-4" /> {t('settings.general')}
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('models')}
-                        className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'models' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
-                    >
-                        <Cpu className="h-4 w-4" /> {t('settings.models')}
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('retrieval')}
-                        className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'retrieval' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
-                    >
-                        <Database className="h-4 w-4" /> {t('settings.retrievalIndexing')}
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('memory')}
-                        className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'memory' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
-                    >
-                        <Brain className="h-4 w-4" /> Memory
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('security')}
-                        className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'security' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
-                    >
-                        <Shield className="h-4 w-4" /> {t('settings.security')}
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('scan')}
-                        className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'scan' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
-                    >
-                        <HardDrive className="h-4 w-4" /> {t('settings.scanScope')}
-                    </button>
+                    {/* Tabs - Non-draggable */}
+                    <div className="flex items-center gap-6" style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
+                        <button
+                            onClick={() => setActiveTab('general')}
+                            className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'general' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
+                        >
+                            <SettingsIcon className="h-4 w-4" /> {t('settings.general')}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('models')}
+                            className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'models' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
+                        >
+                            <Cpu className="h-4 w-4" /> {t('settings.models')}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('retrieval')}
+                            className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'retrieval' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
+                        >
+                            <Database className="h-4 w-4" /> {t('settings.retrievalIndexing')}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('memory')}
+                            className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'memory' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
+                        >
+                            <Brain className="h-4 w-4" /> Memory
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('security')}
+                            className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'security' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
+                        >
+                            <Shield className="h-4 w-4" /> {t('settings.security')}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('scan')}
+                            className={cn("flex items-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors", activeTab === 'scan' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
+                        >
+                            <HardDrive className="h-4 w-4" /> {t('settings.scanScope')}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -753,20 +840,78 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
                                             </span>
                                         </div>
                                     ) : health.services && health.services.length > 0 ? (
-                                        health.services.map((service) => (
-                                            <div key={service.name} className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Activity className="h-4 w-4 text-muted-foreground" />
-                                                    <span className="text-sm font-medium">{service.name}</span>
+                                        mergedHealthServices.map((service) => {
+                                            const runtimeEntry = service.runtimeEntry;
+                                            const isManaged = Boolean(service.key);
+                                            const runtimeState = runtimeEntry?.state;
+
+                                            const isOnline = runtimeEntry ? runtimeEntry.state === 'running' : service.status === 'online';
+                                            const isStarting = runtimeEntry?.state === 'starting';
+
+                                            const stateLabel = (() => {
+                                                if (runtimeEntry) {
+                                                    if (runtimeEntry.state === 'running') return 'Active';
+                                                    if (runtimeEntry.state === 'starting') return 'Starting';
+                                                    if (runtimeEntry.state === 'error') return 'Error';
+                                                    return 'Hibernated';
+                                                }
+                                                return service.status === 'online' ? 'Online' : 'Offline';
+                                            })();
+
+                                            const detailText = runtimeEntry
+                                                ? runtimeEntry.state === 'running'
+                                                    ? runtimeEntry.idleSecondsRemaining != null
+                                                        ? `Hibernates in ${formatDuration(runtimeEntry.idleSecondsRemaining)}`
+                                                        : `${Math.round(service.latencyMs || 0)}ms`
+                                                    : runtimeEntry.state === 'starting'
+                                                        ? '...'
+                                                        : '—'
+                                                : service.status === 'online'
+                                                    ? `${Math.round(service.latencyMs || 0)}ms`
+                                                    : service.details || 'Offline';
+
+                                            const activeModelLabel = service.key ? getActiveModelLabel(service.key) : null;
+
+                                            return (
+                                                <div key={service.name} className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <Activity className="h-4 w-4 text-muted-foreground" />
+                                                        <span className="text-sm font-medium">{service.name}</span>
+                                                        {activeModelLabel && (
+                                                            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                                                {activeModelLabel}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex items-center gap-2 px-2 py-1 rounded bg-muted/50">
+                                                            <span
+                                                                className={cn(
+                                                                    'h-2 w-2 rounded-full',
+                                                                    isOnline ? 'bg-emerald-500' : isStarting ? 'bg-amber-500 animate-pulse' : 'bg-red-500'
+                                                                )}
+                                                            />
+                                                            <span className="text-xs text-muted-foreground">{stateLabel}</span>
+                                                        </div>
+                                                        {isManaged && service.key && (
+                                                            <button
+                                                                onClick={() => toggleManagedModel(service.key!, runtimeState || 'stopped')}
+                                                                disabled={isStarting || !runtimeStatus || !localKey}
+                                                                className={cn(
+                                                                    'p-1 rounded-full hover:bg-muted transition-colors',
+                                                                    isOnline ? 'text-red-500 hover:text-red-600' : 'text-green-500 hover:text-green-600',
+                                                                    (isStarting || !runtimeStatus || !localKey) && 'opacity-60 cursor-not-allowed'
+                                                                )}
+                                                                title={isOnline ? 'Stop model' : 'Start model'}
+                                                            >
+                                                                {isOnline ? <Power className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
+                                                            </button>
+                                                        )}
+                                                        <span className="text-xs text-muted-foreground whitespace-nowrap">{detailText}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className={cn('h-2 w-2 rounded-full', service.status === 'online' ? 'bg-emerald-500' : 'bg-red-500')} />
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {service.status === 'online' ? `${Math.round(service.latencyMs || 0)}ms` : service.details || 'Offline'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     ) : (
                                         <div className="flex items-center gap-3">
                                             <div className="flex items-center gap-2">
@@ -1440,9 +1585,9 @@ export function SettingsPanel({ initialTab = 'general' }: SettingsPanelProps) {
 
                                     <div className="space-y-2">
                                         {apiKeys.map(key => (
-                                            <ApiKeyItem 
-                                                key={key.key} 
-                                                apiKey={key} 
+                                            <ApiKeyItem
+                                                key={key.key}
+                                                apiKey={key}
                                                 localKey={localKey}
                                                 onDelete={() => deleteApiKey(key.key)}
                                             />

@@ -610,7 +610,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             if (saved && ['24h', '1w', '1m', '3m', '6m', 'year2025', 'all', 'custom'].includes(saved)) {
                 return saved as TimeRange;
             }
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
         return '1w';
     });
     const [customDateFrom, setCustomDateFrom] = useState<string>('');
@@ -635,7 +635,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                     return parsed;
                 }
             }
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
         return {
             status: 'idle',
             scannedCount: 0,
@@ -649,7 +649,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             if (saved) {
                 return JSON.parse(saved);
             }
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
         return [];
     });
     const [_folderTree, setFolderTree] = useState<FolderNode[]>([]);
@@ -712,7 +712,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
             try {
                 sessionStorage.setItem(SCAN_RESULTS_KEY, JSON.stringify(scannedFiles));
                 sessionStorage.setItem(SCAN_PROGRESS_KEY, JSON.stringify(scanProgress));
-            } catch (e) { /* ignore quota errors */ }
+            } catch { /* ignore quota errors */ }
         }
     }, [scanProgress.status, scannedFiles]);
 
@@ -720,7 +720,7 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
     useEffect(() => {
         try {
             sessionStorage.setItem(TIME_RANGE_KEY, selectedTimeRange);
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
     }, [selectedTimeRange]);
 
     // Load indexed files to check status (paginated, max 500 per request)
@@ -812,24 +812,16 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                 console.log('Folder may already exist:', folderError);
             }
 
-            // Use different API based on mode:
-            // - Fast: Use staged indexing (fast text extraction, no VLM)
-            // - Deep: Use legacy indexing with VLM processing
-            if (mode === 'fast') {
-                await api.runStagedIndex({
-                    folders: [parentDir],
-                    files: [filePath],
-                    mode: 'reindex', // Always use reindex to reset file stage
-                });
-            } else {
-                await api.runIndex({
-                    mode: 'reindex',
-                    scope: 'folder',
-                    folders: [parentDir],
-                    files: [filePath],
-                    indexing_mode: 'deep',
-                });
+            // Use staged API for both fast and deep modes
+            // For deep mode, enable deep stage first, then run staged index
+            if (mode === 'deep' && (api as any).startDeepIndexing) {
+                await (api as any).startDeepIndexing();
             }
+            await api.runStagedIndex({
+                folders: [parentDir],
+                files: [filePath],
+                mode: 'reindex', // Always use reindex to reset file stage
+            });
             // Reload indexed files after indexing
             await loadIndexedFiles();
         } catch (error) {
@@ -872,23 +864,15 @@ export function ScanWorkspace({ className }: ScanWorkspaceProps) {
                 }
             }
 
-            // Use different API based on mode:
-            // - Fast: Use staged indexing (fast text extraction, no VLM)
-            // - Deep: Use legacy indexing with VLM processing
-            if (mode === 'fast') {
-                await api.runStagedIndex({
-                    folders: parentDirs,
-                    files: filePaths,
-                });
-            } else {
-                await api.runIndex({
-                    mode: 'rescan',
-                    scope: 'folder',
-                    folders: parentDirs,
-                    files: filePaths,
-                    indexing_mode: 'deep',
-                });
+            // Use staged API for both fast and deep modes
+            // For deep mode, enable deep stage first, then run staged index
+            if (mode === 'deep' && (api as any).startDeepIndexing) {
+                await (api as any).startDeepIndexing();
             }
+            await api.runStagedIndex({
+                folders: parentDirs,
+                files: filePaths,
+            });
             // Reload indexed files and clear selection
             await loadIndexedFiles();
             setSelectedFiles(new Set());

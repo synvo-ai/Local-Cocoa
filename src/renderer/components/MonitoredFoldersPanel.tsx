@@ -310,22 +310,16 @@ export function MonitoredFoldersPanel({
     };
 
     // Handle single file index/reindex
-    // Use different API based on mode:
-    // - Fast: Use staged indexing (fast text extraction, no VLM)
-    // - Deep: Use legacy indexing with VLM processing
-    const handleFileIndex = (filePath: string, mode: 'fast' | 'deep') => {
-        if (mode === 'fast') {
-            window.api?.runStagedIndex?.({
-                files: [filePath],
-                mode: 'reindex', // Always use reindex to reset file stage
-            });
-        } else {
-            window.api?.runIndex?.({
-                mode: 'reindex',
-                files: [filePath],
-                indexing_mode: 'deep'
-            });
+    // Use staged API for both fast and deep modes
+    const handleFileIndex = async (filePath: string, mode: 'fast' | 'deep') => {
+        // For deep mode, enable deep stage first
+        if (mode === 'deep' && (window.api as any)?.startDeepIndexing) {
+            await (window.api as any).startDeepIndexing();
         }
+        await window.api?.runStagedIndex?.({
+            files: [filePath],
+            mode: 'reindex', // Always use reindex to reset file stage
+        });
     };
 
     // Combine local error with global indexing error if relevant

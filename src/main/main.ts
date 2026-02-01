@@ -17,11 +17,12 @@ if (process.platform === 'darwin') {
 // Load environment variables first before loading other modules (works in both dev and prod)
 loadEnvConfig();
 
+import './logger'; // Initialize logger
 import { initializeRuntime } from './runtimeMigration';
 import { WindowManager } from './windowManager';
+import { ServiceManager } from './serviceManager';
 import { ModelManager } from './modelManager';
 import { PythonServer } from './pythonServer';
-import { ensureBackendSpawnsReady } from './backendClient';
 import { TrayManager } from './trayManager';
 import { updateLogSettings } from './logger';
 import { registerFileHandlers } from './ipc/files';
@@ -48,6 +49,7 @@ process.on('unhandledRejection', (reason) => {
 
 const windowManager = new WindowManager();
 const modelManager = new ModelManager(config.paths.modelRoot);
+const serviceManager = new ServiceManager(config.paths.projectRoot);
 const pythonServer = new PythonServer();
 let trayManager: TrayManager | null = null;
 
@@ -61,8 +63,8 @@ function broadcastModelEvent(event: ModelDownloadEvent) {
 modelManager.on('event', (event: ModelDownloadEvent) => {
     broadcastModelEvent(event);
     if (event.state === 'completed') {
-        console.log('[Main] Model download completed. Ensuring backend spawns are started...');
-        ensureBackendSpawnsReady().catch(console.error);
+        console.log('[Main] Model download completed. Retrying service startup...');
+        startServices().catch(console.error);
     }
 });
 
@@ -73,17 +75,43 @@ async function startServices() {
     console.log('startServices() called');
     console.log(`app.isPackaged: ${app.isPackaged}, isDev: ${config.isDev}, env: ${process.env.NODE_ENV}`);
 
-    // We pass the models.config.json path so Python can resolve model relative paths
-    const modelsConfigPath = path.join(config.paths.projectRoot, 'config', 'models.config.json');
+    // Resolve all model paths based on user's selected models
+    // VLM model
+    const activeModelId = modelConfig.activeModelId || 'vlm';
+    const vlmModelPath = modelManager.getModelPath(activeModelId);
+    const vlmDescriptor = modelManager.getDescriptor(activeModelId);
+    let vlmMmprojPath: string | undefined;
+    if (vlmDescriptor?.mmprojId) {
+        vlmMmprojPath = modelManager.getModelPath(vlmDescriptor.mmprojId);
+    } else if (activeModelId === 'vlm') {
+        vlmMmprojPath = modelManager.getModelPath('vlm-mmproj');
+    }
 
+    // Embedding model
+    const embeddingModelId = modelConfig.activeEmbeddingModelId || 'embedding-q4';
+    const embeddingModelPath = modelManager.getModelPath(embeddingModelId);
+
+    // Reranker model
+    const rerankerModelId = modelConfig.activeRerankerModelId || 'reranker';
+    const rerankerModelPath = modelManager.getModelPath(rerankerModelId);
+
+    // Whisper model
+    const whisperModelId = modelConfig.activeAudioModelId || 'whisper-small';
+    const whisperModelPath = modelManager.getModelPath(whisperModelId);
+
+    console.log(`Active models - VLM: ${activeModelId}, Embedding: ${embeddingModelId}, Reranker: ${rerankerModelId}, Whisper: ${whisperModelId}`);
+
+    // Start Python Backend with config, including all model paths
     await pythonServer.start({
         LOCAL_RUNTIME_ROOT: config.paths.runtimeRoot,
-        LOCAL_MODEL_ROOT_PATH: config.paths.modelRoot,
-        LOCAL_MODELS_CONFIG_PATH: modelsConfigPath,
-        LOCAL_ACTIVE_MODEL_ID: modelConfig.activeModelId,
-        LOCAL_ACTIVE_EMBEDDING_MODEL_ID: modelConfig.activeEmbeddingModelId,
-        LOCAL_ACTIVE_RERANKER_MODEL_ID: modelConfig.activeRerankerModelId,
-        LOCAL_ACTIVE_AUDIO_MODEL_ID: modelConfig.activeAudioModelId,
+        LOCAL_VISION_MAX_PIXELS: (modelConfig.visionMaxPixels || 1003520).toString(),
+        LOCAL_PDF_ONE_CHUNK_PER_PAGE: String(modelConfig.pdfOneChunkPerPage ?? true),
+        // Model file paths
+        LOCAL_MODEL_VLM_FILE: vlmModelPath,
+        LOCAL_MODEL_EMBEDDING_FILE: embeddingModelPath,
+        LOCAL_MODEL_RERANK_FILE: rerankerModelPath,
+        LOCAL_MODEL_WHISPER_FILE: whisperModelPath,
+        LOCAL_MODEL_VLM_MMPROJ_FILE: vlmMmprojPath ? vlmMmprojPath: '',
         LOCAL_SERVICE_LOG_TO_FILE: config.backend.logToFile ?? 'false',
         LOCAL_SERVICE_BIN_PATH: config.paths.backendRoot,
         // Below variables are only effective in local-cocoa-service's dev build for debugpy support
@@ -95,23 +123,23 @@ async function startServices() {
         LOCAL_SERVICE_DEBUG_PORT: process.env.LOCAL_SERVICE_DEBUG_PORT ?? ''
     });
 
-    try {
-        // Start MCP Direct Server (port 5566)
-        startDirectMCPServer(windowManager);
+    // Start MCP Direct Server (port 5566)
+    startDirectMCPServer(windowManager);
 
-        await ensureBackendSpawnsReady();
-    } catch (err) {
-        console.error('Failed to ensure backend spawns are ready:', err);
-    }
+    console.log('[Main] Starting services with config:', modelConfig);
+    console.log('[Main] All models (VLM, Embedding, Reranker, Whisper) will be started on-demand by Python ModelManager');
+
+    // NOTE: All AI models are now started on-demand by Python's ModelManager
+    // This provides faster app startup, lower memory usage, and proper hibernation support.
+    // The first request to each model type will trigger its startup.
 }
 
 app.whenReady().then(async () => {
     // Initialize log level from config
     updateLogSettings();
-
-    if (process.platform === 'darwin' && app.dock) {
+    if (process.platform === 'darwin') {
         const iconPath = path.join(config.paths.projectRoot, 'assets', 'icon.png');
-        app.dock.setIcon(nativeImage.createFromPath(iconPath));
+        app.dock?.setIcon(nativeImage.createFromPath(iconPath));
     }
 
     windowManager.createApplicationMenu();
@@ -192,7 +220,7 @@ app.on('before-quit', async (event) => {
     console.log('App before-quit: Stopping services...');
 
     try {
-        // We only need to stop the Python server, which will clean up its subprocesses
+        await serviceManager.stopAll();
         pythonServer.stop();
     } catch (error) {
         console.error('Error stopping services:', error);
@@ -208,7 +236,7 @@ registerEmailHandlers();
 registerNotesHandlers();
 registerChatHandlers();
 registerActivityHandlers();
-registerModelHandlers(modelManager);
+registerModelHandlers(modelManager, serviceManager);
 registerSystemHandlers(windowManager);
 registerScanHandlers();
 registerMemoryHandlers();

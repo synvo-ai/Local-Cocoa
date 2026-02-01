@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { X, FileText, ExternalLink, Activity, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Shield, ShieldOff } from 'lucide-react';
+import { X, FileText, ExternalLink, Activity, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Shield, ShieldOff, Maximize2, Loader2, Scan } from 'lucide-react';
 import type { IndexedFile, SearchHit, IndexProgressUpdate, IndexingItem, PrivacyLevel } from '../../types';
 import type { StagedIndexProgress } from '../../../electron/backendClient';
 import { IndexProgressPanel } from '../IndexProgressPanel';
@@ -46,7 +46,7 @@ export function RightPanel({
     const hasPreview = !!(selectedFile || selectedHit);
     const hasIndexing = !!indexingOpen;
     const [activeTab, setActiveTab] = useState<'preview' | 'progress'>(hasPreview ? 'preview' : 'progress');
-    const [zoom, setZoom] = useState<number | 'page-width'>('page-width');
+    const [_zoom, _setZoom] = useState<number | 'page-width'>('page-width');
 
     // Resizable panel state
     const [panelWidth, setPanelWidth] = useState(480);
@@ -87,7 +87,7 @@ export function RightPanel({
 
     // Reset zoom when file changes
     useEffect(() => {
-        setZoom('page-width');
+        _setZoom('page-width');
     }, [selectedFile?.id]);
 
     useEffect(() => {
@@ -122,6 +122,19 @@ export function RightPanel({
     const [privacyLevel, setPrivacyLevel] = useState<PrivacyLevel>('normal');
     const [isUpdatingPrivacy, setIsUpdatingPrivacy] = useState(false);
 
+    // PDF preview state for region zoom
+    const [pdfPageImage, setPdfPageImage] = useState<string | null>(null);
+    const [pdfImageLoading, setPdfImageLoading] = useState(false);
+    const [pdfViewBox, setPdfViewBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+    const [isDrawingSelection, setIsDrawingSelection] = useState(false);
+    const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
+    const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+    const [isDraggingPan, setIsDraggingPan] = useState(false);
+    const [panStart, setPanStart] = useState<{ x: number; y: number } | null>(null);
+    const pdfContainerRef = useRef<HTMLDivElement>(null);
+    const pdfImageRef = useRef<HTMLImageElement>(null);
+    const [imgBounds, setImgBounds] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+
     interface FileChunkSnapshot {
         chunk_id: string;
         file_id: string;
@@ -129,6 +142,10 @@ export function RightPanel({
         text: string;
         snippet: string;
         metadata?: Record<string, any>;
+        // Spatial metadata for chunk area visualization
+        page_num?: number | null;
+        bbox?: [number, number, number, number] | null;  // [x0, y0, x1, y1] normalized 0-1
+        source_regions?: Array<{ page_num: number; bbox: [number, number, number, number]; confidence?: number | null }> | null;
     }
 
     const [chunks, setChunks] = useState<FileChunkSnapshot[]>([]);
@@ -175,6 +192,9 @@ export function RightPanel({
                         text: String(chunk.text ?? ''),
                         snippet: String(chunk.snippet ?? ''),
                         metadata: (chunk.metadata ?? {}) as Record<string, any>,
+                        page_num: chunk.page_num ?? null,
+                        bbox: chunk.bbox ?? null,
+                        source_regions: chunk.source_regions ?? null,
                     }))
                     : [];
                 normalized.sort((a, b) => a.ordinal - b.ordinal);
@@ -413,6 +433,195 @@ export function RightPanel({
         };
     }, [file, isImage]);
 
+    // Load PDF page image for region zoom preview
+    useEffect(() => {
+        if (!file || !isPdf || !fileId || !window.api?.getPdfPageImage) {
+            setPdfPageImage(null);
+            return;
+        }
+
+        let active = true;
+        setPdfImageLoading(true);
+        setPdfViewBox(null);
+        setSelectionRect(null);
+
+        window.api.getPdfPageImage(fileId, pageNumber, 2.0)
+            .then((data) => {
+                if (active) {
+                    setPdfPageImage(`data:image/png;base64,${data}`);
+                }
+            })
+            .catch((err) => {
+                console.error('Failed to load PDF page image:', err);
+                if (active) setPdfPageImage(null);
+            })
+            .finally(() => {
+                if (active) setPdfImageLoading(false);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [file, isPdf, fileId, pageNumber]);
+
+
+    // Reset viewBox when page changes
+    useEffect(() => {
+        setPdfViewBox(null);
+        setSelectionRect(null);
+    }, [pageNumber]);
+
+    // Compute image rendered bounds for bbox overlay positioning
+    const updateImgBounds = useCallback(() => {
+        if (!pdfImageRef.current || !pdfContainerRef.current) {
+            setImgBounds(null);
+            return;
+        }
+        const img = pdfImageRef.current;
+        const container = pdfContainerRef.current;
+        const containerRect = container.getBoundingClientRect();
+        const imgRect = img.getBoundingClientRect();
+        setImgBounds({
+            left: imgRect.left - containerRect.left,
+            top: imgRect.top - containerRect.top,
+            width: imgRect.width,
+            height: imgRect.height,
+        });
+    }, []);
+
+    // PDF region zoom handlers
+    const handlePdfMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        if (!pdfContainerRef.current) return;
+        
+        const rect = pdfContainerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        if (pdfViewBox) {
+            // Already zoomed: start panning
+            setIsDraggingPan(true);
+            setPanStart({ x: e.clientX, y: e.clientY });
+        } else {
+            // Not zoomed: start selection
+            setIsDrawingSelection(true);
+            setSelectionStart({ x, y });
+            setSelectionRect({ x, y, width: 0, height: 0 });
+        }
+    }, [pdfViewBox]);
+
+    const handlePdfMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        if (isDraggingPan && panStart && pdfViewBox && pdfContainerRef.current) {
+            // Panning mode: move the view
+            const containerRect = pdfContainerRef.current.getBoundingClientRect();
+            const deltaX = e.clientX - panStart.x;
+            const deltaY = e.clientY - panStart.y;
+            
+            // Simple pan: convert pixel movement to normalized movement
+            // The viewBox represents what fraction of the image is shown
+            // Moving 1 container-width should move the view by viewBox.width
+            const normalizedDeltaX = -deltaX / containerRect.width * pdfViewBox.width;
+            const normalizedDeltaY = -deltaY / containerRect.height * pdfViewBox.height;
+            
+            // Update viewBox position (allow some overflow for smooth panning)
+            let newX = pdfViewBox.x + normalizedDeltaX;
+            let newY = pdfViewBox.y + normalizedDeltaY;
+            
+            // Soft bounds: allow panning but keep at least 10% of image visible
+            newX = Math.max(-pdfViewBox.width * 0.5, Math.min(1 - pdfViewBox.width * 0.5, newX));
+            newY = Math.max(-pdfViewBox.height * 0.5, Math.min(1 - pdfViewBox.height * 0.5, newY));
+            
+            setPdfViewBox({
+                ...pdfViewBox,
+                x: newX,
+                y: newY,
+            });
+            setPanStart({ x: e.clientX, y: e.clientY });
+            return;
+        }
+        
+        if (!isDrawingSelection || !selectionStart || !pdfContainerRef.current) return;
+        
+        const rect = pdfContainerRef.current.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+        
+        const x = Math.min(selectionStart.x, currentX);
+        const y = Math.min(selectionStart.y, currentY);
+        const width = Math.abs(currentX - selectionStart.x);
+        const height = Math.abs(currentY - selectionStart.y);
+        
+        setSelectionRect({ x, y, width, height });
+    }, [isDrawingSelection, selectionStart, isDraggingPan, panStart, pdfViewBox]);
+
+    const handlePdfMouseUp = useCallback(() => {
+        // Handle pan end
+        if (isDraggingPan) {
+            setIsDraggingPan(false);
+            setPanStart(null);
+            return;
+        }
+        
+        if (!isDrawingSelection || !selectionRect || !pdfContainerRef.current || !pdfImageRef.current) {
+            setIsDrawingSelection(false);
+            setSelectionStart(null);
+            return;
+        }
+        
+        // Only zoom if selection is large enough (at least 20x20 pixels)
+        if (selectionRect.width > 20 && selectionRect.height > 20) {
+            const containerRect = pdfContainerRef.current.getBoundingClientRect();
+            const imgRect = pdfImageRef.current.getBoundingClientRect();
+            
+            // Calculate image position relative to container
+            const imgOffsetX = imgRect.left - containerRect.left;
+            const imgOffsetY = imgRect.top - containerRect.top;
+            const imgWidth = imgRect.width;
+            const imgHeight = imgRect.height;
+            
+            // Convert selection from container coords to image coords
+            const selInImgX = selectionRect.x - imgOffsetX;
+            const selInImgY = selectionRect.y - imgOffsetY;
+            
+            // Normalize to 0-1 range relative to image
+            const normalizedX = selInImgX / imgWidth;
+            const normalizedY = selInImgY / imgHeight;
+            const normalizedW = selectionRect.width / imgWidth;
+            const normalizedH = selectionRect.height / imgHeight;
+            
+            // Clamp to valid range (0 to 1)
+            const clampedX = Math.max(0, Math.min(1, normalizedX));
+            const clampedY = Math.max(0, Math.min(1, normalizedY));
+            const clampedW = Math.max(0.05, Math.min(1 - clampedX, normalizedW));
+            const clampedH = Math.max(0.05, Math.min(1 - clampedY, normalizedH));
+            
+            console.log('Selection:', { 
+                selection: selectionRect,
+                imgOffset: { x: imgOffsetX, y: imgOffsetY },
+                imgSize: { w: imgWidth, h: imgHeight },
+                normalized: { x: normalizedX, y: normalizedY, w: normalizedW, h: normalizedH },
+                clamped: { x: clampedX, y: clampedY, w: clampedW, h: clampedH }
+            });
+            
+            setPdfViewBox({
+                x: clampedX,
+                y: clampedY,
+                width: clampedW,
+                height: clampedH,
+            });
+        }
+        
+        setIsDrawingSelection(false);
+        setSelectionStart(null);
+        setSelectionRect(null);
+    }, [isDrawingSelection, selectionRect, isDraggingPan]);
+
+    const handleResetZoom = useCallback(() => {
+        setPdfViewBox(null);
+        setSelectionRect(null);
+        setIsDraggingPan(false);
+        setPanStart(null);
+    }, []);
+
     useEffect(() => {
         const status = indexProgress?.status ?? null;
         const last = lastIndexStatusRef.current;
@@ -623,7 +832,7 @@ export function RightPanel({
                         )}
 
                         {isPdf && (
-                            <div className="space-y-2 flex-1 flex flex-col min-h-[400px] relative">
+                            <div className="space-y-2 relative">
                                 <div className="flex items-center justify-between">
                                     <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">PDF Preview</h4>
                                     <div className="flex items-center gap-1">
@@ -647,33 +856,226 @@ export function RightPanel({
                                         </button>
                                     </div>
                                 </div>
-                                <iframe
-                                    key={`${file.fullPath}-page-${pageNumber}-zoom-${zoom}`}
-                                    src={`file://${file.fullPath}#page=${pageNumber}&zoom=${zoom}&toolbar=0&navpanes=0`}
-                                    className="w-full flex-1 rounded border bg-white"
-                                    title="PDF Preview"
-                                />
+                                
+                                {/* PDF Image with Region Zoom - Fixed height container */}
+                                <div 
+                                    ref={pdfContainerRef}
+                                    className={`relative rounded border bg-white overflow-hidden select-none ${
+                                        pdfViewBox 
+                                            ? (isDraggingPan ? 'cursor-grabbing' : 'cursor-grab') 
+                                            : 'cursor-crosshair'
+                                    }`}
+                                    style={{ height: '400px' }}
+                                    onMouseDown={handlePdfMouseDown}
+                                    onMouseMove={handlePdfMouseMove}
+                                    onMouseUp={handlePdfMouseUp}
+                                    onMouseLeave={handlePdfMouseUp}
+                                >
+                                    {pdfImageLoading ? (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-muted/20">
+                                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                        </div>
+                                    ) : pdfPageImage ? (
+                                        <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                                            {pdfViewBox ? (() => {
+                                                // Calculate zoom scale to fit the selected region in container
+                                                const scale = Math.min(1 / pdfViewBox.width, 1 / pdfViewBox.height);
+                                                
+                                                // After scaling, calculate how much of the container the region fills
+                                                // If scale = 1/width, region fills 100% width; if scale = 1/height, fills 100% height
+                                                const scaledRegionW = pdfViewBox.width * scale; // fraction of container width
+                                                const scaledRegionH = pdfViewBox.height * scale; // fraction of container height
+                                                
+                                                // Calculate centering offset (in image coordinate %)
+                                                // The empty space is (1 - scaledRegion), half goes on each side
+                                                // Convert from container-relative to image-relative by dividing by scale
+                                                const centerOffsetX = (1 - scaledRegionW) / (2 * scale);
+                                                const centerOffsetY = (1 - scaledRegionH) / (2 * scale);
+                                                
+                                                // Final translate: move region to top-left, then add centering offset
+                                                const translateX = (-pdfViewBox.x + centerOffsetX) * 100;
+                                                const translateY = (-pdfViewBox.y + centerOffsetY) * 100;
+                                                
+                                                return (
+                                                    <img
+                                                        ref={pdfImageRef}
+                                                        src={pdfPageImage}
+                                                        alt={`Page ${pageNumber}`}
+                                                        className="absolute top-0 left-0 transition-transform duration-300 ease-out origin-top-left"
+                                                        style={{
+                                                            maxWidth: 'none',
+                                                            maxHeight: 'none',
+                                                            transform: `scale(${scale}) translate(${translateX}%, ${translateY}%)`,
+                                                        }}
+                                                        draggable={false}
+                                                        onLoad={updateImgBounds}
+                                                    />
+                                                );
+                                            })() : (
+                                                // Normal view - image fits container
+                                                <img
+                                                    ref={pdfImageRef}
+                                                    src={pdfPageImage}
+                                                    alt={`Page ${pageNumber}`}
+                                                    className="max-w-full max-h-full object-contain"
+                                                    draggable={false}
+                                                    onLoad={updateImgBounds}
+                                                />
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                                            Failed to load preview
+                                        </div>
+                                    )}
+                                    
+                                    {/* Source regions spotlight overlay */}
+                                    {!pdfViewBox && imgBounds && activeChunk?.page_num === pageNumber && (() => {
+                                        // Prefer source_regions (per-block), fall back to single bbox
+                                        const regions = activeChunk.source_regions?.filter(
+                                            (r) => r.page_num === pageNumber && r.bbox
+                                        );
+                                        const boxes = regions && regions.length > 0
+                                            ? regions.map((r) => r.bbox)
+                                            : activeChunk.bbox ? [activeChunk.bbox] : [];
+                                        if (boxes.length === 0) return null;
+
+                                        const iL = imgBounds.left;
+                                        const iT = imgBounds.top;
+                                        const iW = imgBounds.width;
+                                        const iH = imgBounds.height;
+
+                                        return (
+                                            <>
+                                                {/* Dark overlay with cutouts for highlighted regions */}
+                                                <svg
+                                                    className="absolute inset-0 pointer-events-none z-10 transition-opacity duration-300"
+                                                    width="100%" height="100%"
+                                                    style={{ opacity: 1 }}
+                                                >
+                                                    <defs>
+                                                        <mask id="spotlight-mask">
+                                                            {/* White = visible (dimmed area) */}
+                                                            <rect width="100%" height="100%" fill="white" />
+                                                            {/* Black = cutout (clear area for highlighted blocks) */}
+                                                            {boxes.map((box, i) => (
+                                                                <rect
+                                                                    key={i}
+                                                                    x={iL + box[0] * iW}
+                                                                    y={iT + box[1] * iH}
+                                                                    width={(box[2] - box[0]) * iW}
+                                                                    height={(box[3] - box[1]) * iH}
+                                                                    rx={2}
+                                                                    fill="black"
+                                                                />
+                                                            ))}
+                                                        </mask>
+                                                    </defs>
+                                                    {/* Semi-transparent overlay masked to reveal highlighted regions */}
+                                                    <rect
+                                                        width="100%" height="100%"
+                                                        fill="rgba(0,0,0,0.35)"
+                                                        mask="url(#spotlight-mask)"
+                                                    />
+                                                </svg>
+                                                {/* Amber borders around each highlighted region */}
+                                                {boxes.map((box, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="absolute border-2 border-amber-500/70 pointer-events-none z-10 rounded-sm transition-all duration-300"
+                                                        style={{
+                                                            left: iL + box[0] * iW,
+                                                            top: iT + box[1] * iH,
+                                                            width: (box[2] - box[0]) * iW,
+                                                            height: (box[3] - box[1]) * iH,
+                                                        }}
+                                                    />
+                                                ))}
+                                            </>
+                                        );
+                                    })()}
+
+                                    {/* Selection rectangle while dragging */}
+                                    {isDrawingSelection && selectionRect && selectionRect.width > 0 && selectionRect.height > 0 && (
+                                        <div
+                                            className="absolute border-2 border-primary bg-primary/10 pointer-events-none z-10"
+                                            style={{
+                                                left: selectionRect.x,
+                                                top: selectionRect.y,
+                                                width: selectionRect.width,
+                                                height: selectionRect.height,
+                                            }}
+                                        />
+                                    )}
+                                    
+                                    {/* Hint overlay */}
+                                    {!isDrawingSelection && !isDraggingPan && pdfPageImage && !pdfImageLoading && (
+                                        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-center pointer-events-none z-10">
+                                            <div className="bg-background/80 backdrop-blur text-[10px] text-muted-foreground px-2 py-1 rounded-md flex items-center gap-1.5">
+                                                <Scan className="h-3 w-3" />
+                                                <span>{pdfViewBox ? 'Drag to pan • Click reset to zoom out' : 'Drag to select region and zoom'}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                {/* Zoom controls */}
                                 <div className="absolute bottom-6 right-6 flex flex-col gap-2 bg-background/90 backdrop-blur border rounded-lg shadow-lg p-1.5">
                                     <button
-                                        onClick={() => setZoom(z => {
-                                            const current = typeof z === 'number' ? z : 100;
-                                            return Math.min(current + 25, 1000);
-                                        })}
+                                        onClick={() => {
+                                            // Zoom in: shrink the viewBox (show smaller region)
+                                            if (pdfViewBox) {
+                                                const zoomFactor = 0.8; // Shrink to 80%
+                                                const newWidth = Math.max(0.05, pdfViewBox.width * zoomFactor);
+                                                const newHeight = Math.max(0.05, pdfViewBox.height * zoomFactor);
+                                                // Keep centered
+                                                const newX = Math.max(0, Math.min(1 - newWidth, pdfViewBox.x + (pdfViewBox.width - newWidth) / 2));
+                                                const newY = Math.max(0, Math.min(1 - newHeight, pdfViewBox.y + (pdfViewBox.height - newHeight) / 2));
+                                                setPdfViewBox({ x: newX, y: newY, width: newWidth, height: newHeight });
+                                            } else {
+                                                // Start with a centered 50% view
+                                                setPdfViewBox({ x: 0.25, y: 0.25, width: 0.5, height: 0.5 });
+                                            }
+                                        }}
                                         className="p-1.5 hover:bg-muted rounded-md transition-colors"
                                         title="Zoom In"
                                     >
                                         <ZoomIn className="h-4 w-4" />
                                     </button>
                                     <button
-                                        onClick={() => setZoom(z => {
-                                            const current = typeof z === 'number' ? z : 100;
-                                            return Math.max(current - 25, 10);
-                                        })}
+                                        onClick={() => {
+                                            // Zoom out: expand the viewBox (show larger region)
+                                            if (pdfViewBox) {
+                                                const zoomFactor = 1.25; // Expand to 125%
+                                                const newWidth = Math.min(1, pdfViewBox.width * zoomFactor);
+                                                const newHeight = Math.min(1, pdfViewBox.height * zoomFactor);
+                                                // Keep centered
+                                                const newX = Math.max(0, Math.min(1 - newWidth, pdfViewBox.x - (newWidth - pdfViewBox.width) / 2));
+                                                const newY = Math.max(0, Math.min(1 - newHeight, pdfViewBox.y - (newHeight - pdfViewBox.height) / 2));
+                                                
+                                                // If we're back to full view, reset
+                                                if (newWidth >= 0.95 && newHeight >= 0.95) {
+                                                    setPdfViewBox(null);
+                                                } else {
+                                                    setPdfViewBox({ x: newX, y: newY, width: newWidth, height: newHeight });
+                                                }
+                                            }
+                                        }}
                                         className="p-1.5 hover:bg-muted rounded-md transition-colors"
                                         title="Zoom Out"
+                                        disabled={!pdfViewBox}
                                     >
                                         <ZoomOut className="h-4 w-4" />
                                     </button>
+                                    {pdfViewBox && (
+                                        <button
+                                            onClick={handleResetZoom}
+                                            className="p-1.5 hover:bg-muted rounded-md transition-colors border-t"
+                                            title="Reset Zoom"
+                                        >
+                                            <Maximize2 className="h-4 w-4" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )}

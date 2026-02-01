@@ -1,6 +1,22 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { ModelStatusSummary, ModelDownloadEvent, ModelAssetStatus } from '../types';
 
+export type ModelRuntimeState = 'stopped' | 'starting' | 'running' | 'error';
+
+export interface ModelRuntimeStatusEntry {
+    state: ModelRuntimeState;
+    lastAccessed: number | null;
+    idleTimeoutSeconds: number | null;
+    idleSecondsRemaining: number | null;
+}
+
+export interface ModelRuntimeStatus {
+    embedding: ModelRuntimeStatusEntry;
+    rerank: ModelRuntimeStatusEntry;
+    vision: ModelRuntimeStatusEntry;
+    whisper: ModelRuntimeStatusEntry;
+}
+
 const FALLBACK_MODEL_ASSETS: ModelAssetStatus[] = [
     { id: 'embedding', label: 'Embedding encoder', path: '', exists: false, sizeBytes: null },
     { id: 'reranker', label: 'Reranker model', path: '', exists: false, sizeBytes: null },
@@ -14,6 +30,7 @@ export function useModelStatus() {
     const [modelDownloadLog, setModelDownloadLog] = useState<string[]>([]);
     const [activeModelId, setActiveModelId] = useState<string>('vlm');
     const [availableModels, setAvailableModels] = useState<ModelAssetStatus[]>([]);
+    const [runtimeStatus, setRuntimeStatus] = useState<ModelRuntimeStatus | null>(null);
     const bootstrapTriggerRef = useRef(false);
 
     const modelBridgeAvailable = typeof window !== 'undefined' && Boolean(window.api?.modelStatus);
@@ -41,6 +58,48 @@ export function useModelStatus() {
             return null;
         }
     }, []);
+
+    const refreshRuntimeStatus = useCallback(async () => {
+        try {
+            const apiKey = await (window as any).api?.getLocalKey?.();
+            const headers: Record<string, string> = {};
+            if (apiKey) {
+                headers['X-API-Key'] = apiKey;
+            }
+
+            // TODO: should use URl from setting not hardcoded
+            const res = await fetch('http://127.0.0.1:8890/models/status', {
+                headers,
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const normalize = (entry: any): ModelRuntimeStatusEntry => ({
+                    state: (entry?.state ?? 'stopped') as ModelRuntimeState,
+                    lastAccessed: typeof entry?.last_accessed === 'number' ? entry.last_accessed : null,
+                    idleTimeoutSeconds: typeof entry?.idle_timeout_seconds === 'number' ? entry.idle_timeout_seconds : null,
+                    idleSecondsRemaining: typeof entry?.idle_seconds_remaining === 'number' ? entry.idle_seconds_remaining : null,
+                });
+
+                setRuntimeStatus({
+                    embedding: normalize(data.embedding),
+                    rerank: normalize(data.rerank),
+                    vision: normalize(data.vision),
+                    whisper: normalize(data.whisper),
+                });
+            } else {
+                setRuntimeStatus(null);
+            }
+        } catch {
+            // Backend might be down
+            setRuntimeStatus(null);
+        }
+    }, []);
+
+    useEffect(() => {
+        refreshRuntimeStatus();
+        const timer = setInterval(refreshRuntimeStatus, 5000);
+        return () => clearInterval(timer);
+    }, [refreshRuntimeStatus]);
 
     const setActiveModel = useCallback(async (modelId: string) => {
         const api = window.api;
@@ -198,6 +257,9 @@ export function useModelStatus() {
         activeModelId,
         availableModels,
         setActiveModel,
-        addLocalModel
+        addLocalModel,
+        runtimeStatus,
+        refreshRuntimeStatus,
+        refreshModelStatus
     };
 }

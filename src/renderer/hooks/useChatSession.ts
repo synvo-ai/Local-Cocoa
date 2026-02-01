@@ -240,8 +240,8 @@ Title:`;
                 }
 
                 try {
-                    const limit = config?.qaContextLimit ?? 5;
-                    const response = await api.ask(text, limit, 'qa', searchMode);
+                    // Let backend use its own qa_context_limit setting
+                    const response = await api.ask(text, undefined, 'qa', searchMode);
                     const answer = response.answer?.trim() || 'The backend returned an empty answer.';
                     const hits = response.hits ?? [];
                     const metaParts: string[] = [];
@@ -381,14 +381,14 @@ Title:`;
                 }));
             };
 
-            const limit = config?.qaContextLimit ?? 5;
             let currentThinkingSteps: ThinkingStep[] = [];
             let isMultiPath = false;
             let needsUserDecision = false;
             let resumeToken: string | null = null;
             let decisionMessage: string | undefined;
 
-            api.askStream(text, limit, 'qa', {
+            // Let backend use its own qa_context_limit setting
+            api.askStream(text, undefined, 'qa', {
                 onData: (chunkStr) => {
                     if (askSessionRef.current !== requestId) return;
 
@@ -477,8 +477,10 @@ Title:`;
                             } else if (payload.type === 'status') {
                                 // Map status codes to user-friendly messages
                                 const statusMessages: Record<string, string> = {
+                                    'loading_model': 'Starting AI model...',
                                     'searching': 'Searching...',
                                     'answering': 'Generating answer...',
+                                    'direct_answer': 'Generating answer...',
                                     'decomposing_query': 'Decomposing query...',
                                     'merging_results': 'Merging results...',
                                     'synthesizing_answer': 'Synthesizing answer...',
@@ -1019,9 +1021,8 @@ Title:`;
                 }));
             };
 
-            const limit = config?.qaContextLimit ?? 5;
-
-            api.askStream(text, limit, 'qa', {
+            // Let backend use its own qa_context_limit setting
+            api.askStream(text, undefined, 'qa', {
                 onData: (chunkStr) => {
                     if (askSessionRef.current !== requestId) return;
                     buffer += chunkStr;

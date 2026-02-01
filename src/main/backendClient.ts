@@ -150,6 +150,8 @@ async function requestBinary(endpoint: string, init?: RequestInit): Promise<Uint
     const key = getLocalKey();
     if (key) {
         headers.set('X-API-Key', key);
+        // IMPORTANT: Mark all requests from Electron app as local_ui for privacy access
+        headers.set('X-Request-Source', 'local_ui');
     }
 
     try {
@@ -648,6 +650,22 @@ export async function getStageProgress(folderId?: string): Promise<StagedIndexPr
     return requestJson<StagedIndexProgress>(url.toString(), { method: 'GET' });
 }
 
+export interface ErrorFile {
+    id: string;
+    name: string;
+    path: string;
+    error_reason: string | null;
+    error_at: string | null;
+}
+
+export async function getErrorFiles(folderId?: string): Promise<ErrorFile[]> {
+    const url = new URL(resolveEndpoint('/index/error-files'));
+    if (folderId) {
+        url.searchParams.set('folder_id', folderId);
+    }
+    return requestJson<ErrorFile[]>(url.toString(), { method: 'GET' });
+}
+
 export interface SemanticControlResponse {
     semantic_enabled: boolean;
     started?: boolean;
@@ -673,6 +691,79 @@ export async function stopDeepIndexing(): Promise<DeepControlResponse> {
 
 export async function getDeepStatus(): Promise<DeepStatusResponse> {
     return requestJson<DeepStatusResponse>('/index/deep-status', { method: 'GET' });
+}
+
+/**
+ * Stop a model running in the Python backend.
+ * Used when switching models to ensure the old model is properly stopped.
+ */
+export async function stopPythonModel(modelType: 'vision' | 'embedding' | 'reranking' | 'transcription'): Promise<{ status: string; model: string }> {
+    return requestJson<{ status: string; model: string }>(`/models/${modelType}/stop`, { method: 'POST' });
+}
+
+/**
+ * Update VLM model configuration in the Python backend.
+ * This ensures the Python ModelManager uses the correct model files
+ * when starting VLM on-demand (e.g., after system hibernation).
+ */
+export async function updateVLMConfig(config: { vlm_model?: string; vlm_mmproj?: string }): Promise<{ vlm_model: string; vlm_mmproj: string }> {
+    return requestJson<{ vlm_model: string; vlm_mmproj: string }>('/models/vlm/config', {
+        method: 'PATCH',
+        body: JSON.stringify(config)
+    });
+}
+
+/**
+ * Update embedding model configuration in the Python backend.
+ */
+export async function updateEmbeddingConfig(config: { embedding_model?: string }): Promise<{ embedding_model: string }> {
+    return requestJson<{ embedding_model: string }>('/models/embedding/config', {
+        method: 'PATCH',
+        body: JSON.stringify(config)
+    });
+}
+
+/**
+ * Update reranker model configuration in the Python backend.
+ */
+export async function updateRerankerConfig(config: { rerank_model?: string }): Promise<{ rerank_model: string }> {
+    return requestJson<{ rerank_model: string }>('/models/reranker/config', {
+        method: 'PATCH',
+        body: JSON.stringify(config)
+    });
+}
+
+/**
+ * Update whisper model configuration in the Python backend.
+ */
+export async function updateWhisperConfig(config: { whisper_model?: string }): Promise<{ whisper_model: string }> {
+    return requestJson<{ whisper_model: string }>('/models/whisper/config', {
+        method: 'PATCH',
+        body: JSON.stringify(config)
+    });
+}
+
+/**
+ * Update all model configurations at once in the Python backend.
+ * This is useful during app startup to sync all model paths.
+ */
+export async function updateAllModelsConfig(config: {
+    vlm_model?: string;
+    vlm_mmproj?: string;
+    embedding_model?: string;
+    rerank_model?: string;
+    whisper_model?: string;
+}): Promise<{
+    vlm_model: string;
+    vlm_mmproj: string;
+    embedding_model: string;
+    rerank_model: string;
+    whisper_model: string;
+}> {
+    return requestJson('/models/config', {
+        method: 'PATCH',
+        body: JSON.stringify(config)
+    });
 }
 
 export async function runStagedIndex(options?: { 
@@ -920,7 +1011,7 @@ export async function searchFilesStream(
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
 
-         
+        // eslint-disable-next-line no-constant-condition
         while (true) {
             const { done, value } = await reader.read();
             if (done) {
@@ -937,11 +1028,15 @@ export async function searchFilesStream(
 
 export async function askWorkspace(
     query: string,
-    limit = 5,
+    limit: number | undefined,
     mode: 'qa' | 'chat' = 'qa',
     searchMode: 'auto' | 'knowledge' | 'direct' = 'auto'
 ): Promise<QaResponse> {
-    const payload = { query, mode, limit, search_mode: searchMode };
+    // Only include limit in payload if explicitly provided; otherwise let backend use its qa_context_limit setting
+    const payload: Record<string, any> = { query, mode, search_mode: searchMode };
+    if (limit !== undefined) {
+        payload.limit = limit;
+    }
     const data = await requestJson<{ answer: string; hits: any[]; latency_ms?: number }>(
         '/qa',
         {
@@ -954,7 +1049,7 @@ export async function askWorkspace(
 
 export async function askWorkspaceStream(
     query: string,
-    limit = 5,
+    limit: number | undefined,
     mode: 'qa' | 'chat' = 'qa',
     onData: (chunk: string) => void,
     onError: (error: Error) => void,
@@ -963,14 +1058,17 @@ export async function askWorkspaceStream(
     resumeToken?: string,
     useVisionForAnswer?: boolean
 ): Promise<void> {
-    const payload = { 
+    // Only include limit in payload if explicitly provided; otherwise let backend use its qa_context_limit setting
+    const payload: Record<string, any> = { 
         query, 
         mode, 
-        limit, 
         search_mode: searchMode, 
         resume_token: resumeToken,
         use_vision_for_answer: useVisionForAnswer ?? false
     };
+    if (limit !== undefined) {
+        payload.limit = limit;
+    }
     console.log('[backendClient] askWorkspaceStream payload:', JSON.stringify(payload));
     try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -996,7 +1094,7 @@ export async function askWorkspaceStream(
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
 
-         
+        // eslint-disable-next-line no-constant-condition
         while (true) {
             const { done, value } = await reader.read();
             if (done) {
@@ -1086,6 +1184,20 @@ export async function getChunkHighlightPngBase64(chunkId: string, zoom: number =
         method: 'GET'
     });
     // Electron main process has Node Buffer.
+    return Buffer.from(bytes).toString('base64');
+}
+
+export async function getPdfPageImageBase64(fileId: string, pageNumber: number, zoom: number = 2.0): Promise<string> {
+    if (!fileId) {
+        throw new Error('Missing file id.');
+    }
+    if (pageNumber < 1) {
+        throw new Error('Page number must be >= 1.');
+    }
+    const params = new URLSearchParams();
+    params.set('zoom', String(zoom));
+    const endpoint = `/files/${encodeURIComponent(fileId)}/pages/${pageNumber}/image.png?${params.toString()}`;
+    const bytes = await requestBinary(endpoint, { method: 'GET' });
     return Buffer.from(bytes).toString('base64');
 }
 
@@ -1425,7 +1537,7 @@ export async function streamBasicProfile(
         const decoder = new TextDecoder();
         let buffer = '';
 
-         
+        // eslint-disable-next-line no-constant-condition
         while (true) {
             const { done, value } = await reader.read();
 
@@ -1720,44 +1832,4 @@ export interface BackendSettings {
  */
 export async function getBackendSettings(): Promise<BackendSettings> {
     return requestJson<BackendSettings>('/settings');
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Backend Spawn Management (Managed by Python process)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Get status of a specific spawn.
- */
-export async function getBackendSpawnStatus(alias: string): Promise<{ alias: string; running: boolean }> {
-    return requestJson<{ alias: string; running: boolean }>(`/spawns/status/${encodeURIComponent(alias)}`, {
-        method: 'GET'
-    });
-}
-
-/**
- * Get status of all spawns.
- */
-export async function getAllBackendSpawnsStatus(): Promise<{ alias: string; running: boolean }[]> {
-    return requestJson<{ alias: string; running: boolean }[]>('/spawns/status', {
-        method: 'GET'
-    });
-}
-
-/**
- * Stop all spawns managed by the Python process.
- */
-export async function stopAllBackendSpawns(): Promise<void> {
-    await requestJson('/spawns/stop-all', {
-        method: 'POST'
-    });
-}
-
-/**
- * Tell Python to ensure all spawns are started (e.g. after a model download).
- */
-export async function ensureBackendSpawnsReady(): Promise<void> {
-    await requestJson('/spawns/start-all', {
-        method: 'POST'
-    });
 }

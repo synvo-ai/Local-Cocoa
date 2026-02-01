@@ -18,7 +18,7 @@
         "prepare": "husky",
         "preview": "npm run build && electron dist-electron/main/main.js",
         "dist:dmg": "cross-env NODE_ENV=production npm run build && electron-builder --mac dmg",
-        "dist:dmg-debug": "npm run build && electron-builder --mac dmg -c.mac.identity=null",
+        "dist:dmg-debug": "cross-env NODE_ENV=production npm run build && electron-builder --mac dmg -c.mac.identity=null",
         "dist:exe": "cross-env NODE_ENV=production npm run build && electron-builder --win nsis"
     },
     "lint-staged": {
@@ -29,6 +29,7 @@
     },
     "dependencies": {
         "@tailwindcss/vite": "^4.1.18",
+        "@tanstack/react-virtual": "^3.13.18",
         "archiver": "^7.0.1",
         "clsx": "^2.1.1",
         "dotenv": "^17.2.3",
@@ -91,26 +92,19 @@
         "files": [
             "dist/**/*",
             "dist-electron/**/*",
+            "dist-backend/**/*",
             "package.json",
             "config/*",
             "assets/*"
         ],
         "extraResources": [
             {
-                "from": "runtime/local-cocoa-server",
-                "to": "local-cocoa-server"
+                "from": "dist-backend",
+                "to": ""
             },
             {
                 "from": "plugins",
                 "to": "plugins"
-            },
-            {
-                "from": "runtime/llama-cpp/bin",
-                "to": "llama-cpp/bin"
-            },
-            {
-                "from": "runtime/whisper-cpp/bin",
-                "to": "whisper-cpp/bin"
             }
         ],
         "mac": {

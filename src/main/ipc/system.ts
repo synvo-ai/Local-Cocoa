@@ -85,6 +85,22 @@ export function registerSystemHandlers(windowManager: WindowManager) {
         return true;
     });
 
+    ipcMain.handle('system:show-in-folder', async (_event, filePath: string) => {
+        if (!filePath || typeof filePath !== 'string') {
+            throw new Error('Missing file path.');
+        }
+        // Resolve ~ to home directory if needed
+        const resolvedPath = filePath.startsWith('~') 
+            ? path.join(os.homedir(), filePath.slice(1)) 
+            : filePath;
+        
+        if (!fs.existsSync(resolvedPath)) {
+            throw new Error(`File not found: ${resolvedPath}`);
+        }
+        shell.showItemInFolder(resolvedPath);
+        return true;
+    });
+
     ipcMain.handle('system:specs', async () => {
         return {
             totalMemory: os.totalmem(),

@@ -37,24 +37,12 @@ export function loadEnvConfig() {
     const configDir = path.join(projectRoot, 'config');
 
     console.log(`[Env] Loading environment for mode: ${mode} (isPackaged: ${app.isPackaged}, NODE_ENV: ${process.env.NODE_ENV})`);
+    console.log(`[Env] Config directory: ${configDir}`);
 
-    // First read .env as base value set
-    const baseEnv = dotenv.config({path: path.join(configDir, '.env')}).parsed || {};
-    dotenvExpand.expand({ parsed: baseEnv });
-
-    // Then read .env.mode as override value set
-    const modeEnv = dotenv.config({path: path.join(configDir, `.env.${mode}`)}).parsed || {};
-    dotenvExpand.expand({ parsed: modeEnv });
-
-    // Next, merge all value sets with proirity order: prodEnv -> baseEnv -> process.env
-    const finalEnv = {
-        ...baseEnv,    // lowest priority: .env
-        ...modeEnv,    // middle priority: .env.mode
-        ...process.env // highest priority: system original value override all
-    };
-
-    // Last, merge all value sets with proirity order: prodEnv -> baseEnv -> process.env
-    Object.assign(process.env, finalEnv);
+    // Load .env.mode configuration first
+    dotenv.config({ path: path.join(configDir, `.env.${mode}`) });
+    // Then load .env configuration and expand values like ${LOCAL_SERVICE_MAIN_HOST}
+    dotenvExpand.expand(dotenv.config({ path: path.join(configDir, `.env`) }));
 }
 
 export const config = {
